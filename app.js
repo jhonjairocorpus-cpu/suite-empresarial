@@ -167,7 +167,7 @@ function renderAccounting() {
   const expenseRatio = totals.income ? Math.min(100, Math.round((totals.expense / totals.income) * 100)) : 0;
 
   modulePanel.innerHTML = `
-    ${moduleHero("accounting", "Balance ${formatMoney(totals.balance)}")}
+    ${moduleHero("accounting", `Balance ${formatMoney(totals.balance)}`)}
     <div class="panel-grid">
       <div class="summary-grid">
         ${metricCard("Ingresos", formatMoney(totals.income), "+18% frente al periodo anterior")}
