@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f766e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="Suite Empresarial">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="description" content="Sistema contable, POS y nómina instalable para Android, Apple y Windows.">
+    <title>Suite Empresarial</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="assets/icon-192.png">
+    <link rel="apple-touch-icon" href="assets/icon-192.png">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="selector-view" id="selectorView" aria-labelledby="appTitle">
+        <div class="brand-strip">
+          <div>
+            <p class="eyebrow">Panel de trabajo</p>
+            <h1 id="appTitle">Elige un sistema</h1>
+          </div>
+          <button class="install-button hidden" id="installButton" type="button">Instalar</button>
+          <span class="status-pill">Instalable</span>
+        </div>
+
+        <div class="module-list" role="radiogroup" aria-label="Sistemas disponibles">
+          <button class="module-option" type="button" data-module="accounting" aria-checked="false" role="radio">
+            <span>Sistema Contable</span>
+            <span class="radio-mark" aria-hidden="true"></span>
+          </button>
+          <button class="module-option" type="button" data-module="pos" aria-checked="false" role="radio">
+            <span>Sistema POS y Facturación</span>
+            <span class="radio-mark" aria-hidden="true"></span>
+          </button>
+          <button class="module-option" type="button" data-module="payroll" aria-checked="false" role="radio">
+            <span>Sistema de Nómina</span>
+            <span class="radio-mark" aria-hidden="true"></span>
+          </button>
+        </div>
+      </section>
+
+      <section class="workspace-view hidden" id="workspaceView" aria-live="polite">
+        <header class="workspace-header">
+          <button class="icon-button" id="backButton" type="button" aria-label="Volver">
+            <span aria-hidden="true">&#8592;</span>
+          </button>
+          <div>
+            <p class="eyebrow">Módulo activo</p>
+            <h2 id="moduleTitle">Sistema</h2>
+          </div>
+        </header>
+
+        <div class="tabs" role="tablist" aria-label="Cambiar sistema">
+          <button class="tab active" type="button" data-module="accounting">Contable</button>
+          <button class="tab" type="button" data-module="pos">POS</button>
+          <button class="tab" type="button" data-module="payroll">Nómina</button>
+        </div>
+
+        <div id="modulePanel"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
