@@ -1,4 +1,4 @@
-const CACHE_NAME = "suite-empresarial-v2";
+const CACHE_NAME = "suite-empresarial-v3";
 const APP_ASSETS = [
   "./",
   "./index.html",

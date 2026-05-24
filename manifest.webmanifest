@@ -1,13 +1,13 @@
 {
-  "name": "Suite Empresarial",
-  "short_name": "Suite",
-  "description": "Sistema contable, POS y nomina para empresas.",
+  "name": "Quantrox Suite Empresarial",
+  "short_name": "Quantrox",
+  "description": "Suite empresarial con facturacion, POS, inventario, contabilidad, nomina, clientes y reportes.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
-  "theme_color": "#0f766e",
+  "theme_color": "#08111f",
   "categories": ["business", "finance", "productivity"],
   "icons": [
     {

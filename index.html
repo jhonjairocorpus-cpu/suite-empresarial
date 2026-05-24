@@ -3,144 +3,20 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#0f172a">
+    <meta name="theme-color" content="#08111f">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="Suite Empresarial">
+    <meta name="apple-mobile-web-app-title" content="Quantrox Suite">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="description" content="Suite empresarial instalable con módulos de contabilidad, POS, facturación y nómina para Android, Apple y Windows.">
-    <title>Suite Empresarial | Quantrox Systems</title>
+    <meta name="description" content="Suite empresarial instalable para facturacion, POS, inventario, contabilidad, nomina, clientes y reportes.">
+    <title>Quantrox Suite Empresarial</title>
     <link rel="manifest" href="manifest.webmanifest">
     <link rel="icon" href="assets/icon-192.png">
     <link rel="apple-touch-icon" href="assets/icon-192.png">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <main class="app-shell">
-      <section class="selector-view" id="selectorView" aria-labelledby="appTitle">
-        <header class="topbar">
-          <a class="brand" href="https://quantroxsystems.cloud/" aria-label="Quantrox Systems">
-            <span class="brand-mark">Q</span>
-            <span>
-              <strong>Quantrox Suite</strong>
-              <small>Demo empresarial</small>
-            </span>
-          </a>
-          <div class="top-actions">
-            <button class="install-button hidden" id="installButton" type="button">Instalar app</button>
-            <span class="status-pill">PWA lista</span>
-          </div>
-        </header>
-
-        <section class="hero-panel">
-          <div class="hero-copy">
-            <p class="eyebrow">Sistema contable, POS y nómina</p>
-            <h1 id="appTitle">Una suite para operar tu negocio desde cualquier dispositivo.</h1>
-            <p>
-              Controla ventas, movimientos contables, facturación y nómina en una experiencia instalable para Android, iPhone, iPad, Windows y macOS.
-            </p>
-            <div class="hero-actions">
-              <button class="primary-button" type="button" data-open-module="pos">Probar facturación</button>
-              <button class="secondary-button" type="button" data-open-module="accounting">Ver panel financiero</button>
-            </div>
-          </div>
-          <div class="preview-device" aria-label="Vista previa de la suite">
-            <div class="device-top">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-            <div class="device-metrics">
-              <article>
-                <small>Ventas hoy</small>
-                <strong>$ 2.8M</strong>
-              </article>
-              <article>
-                <small>Facturas</small>
-                <strong>34</strong>
-              </article>
-            </div>
-            <div class="mini-chart">
-              <span style="height: 44%"></span>
-              <span style="height: 62%"></span>
-              <span style="height: 38%"></span>
-              <span style="height: 78%"></span>
-              <span style="height: 58%"></span>
-              <span style="height: 88%"></span>
-            </div>
-            <div class="device-list">
-              <span><b>POS</b><em>Factura #1034</em></span>
-              <span><b>Nómina</b><em>8 empleados</em></span>
-              <span><b>Contable</b><em>Balance positivo</em></span>
-            </div>
-          </div>
-        </section>
-
-        <section class="selector-summary" aria-label="Indicadores principales">
-          <article>
-            <span>Instalable</span>
-            <strong>Android, Apple y Windows</strong>
-          </article>
-          <article>
-            <span>Datos demo</span>
-            <strong>Guardado local</strong>
-          </article>
-          <article>
-            <span>Escalable</span>
-            <strong>Lista para base de datos</strong>
-          </article>
-        </section>
-
-        <section class="module-list" role="radiogroup" aria-label="Sistemas disponibles">
-          <button class="module-option" type="button" data-module="accounting" aria-checked="false" role="radio">
-            <span class="module-icon">01</span>
-            <span>
-              <strong>Sistema Contable</strong>
-              <small>Ingresos, gastos, balances y actividad financiera.</small>
-            </span>
-            <span class="radio-mark" aria-hidden="true"></span>
-          </button>
-          <button class="module-option" type="button" data-module="pos" aria-checked="false" role="radio">
-            <span class="module-icon">02</span>
-            <span>
-              <strong>POS y Facturación</strong>
-              <small>Ventas rápidas, IVA, totales y detalle de factura.</small>
-            </span>
-            <span class="radio-mark" aria-hidden="true"></span>
-          </button>
-          <button class="module-option" type="button" data-module="payroll" aria-checked="false" role="radio">
-            <span class="module-icon">03</span>
-            <span>
-              <strong>Sistema de Nómina</strong>
-              <small>Empleados, salarios, provisiones y costo mensual.</small>
-            </span>
-            <span class="radio-mark" aria-hidden="true"></span>
-          </button>
-        </section>
-      </section>
-
-      <section class="workspace-view hidden" id="workspaceView" aria-live="polite">
-        <header class="workspace-header">
-          <button class="icon-button" id="backButton" type="button" aria-label="Volver">
-            <span aria-hidden="true">&#8592;</span>
-          </button>
-          <div>
-            <p class="eyebrow">Módulo activo</p>
-            <h2 id="moduleTitle">Sistema</h2>
-          </div>
-          <a class="contact-button" href="https://wa.me/573218247072?text=Hola%20Quantrox%20Systems,%20quiero%20una%20demo%20de%20la%20Suite%20Empresarial" target="_blank" rel="noopener">Solicitar demo</a>
-        </header>
-
-        <nav class="tabs" role="tablist" aria-label="Cambiar sistema">
-          <button class="tab active" type="button" data-module="accounting">Contable</button>
-          <button class="tab" type="button" data-module="pos">POS</button>
-          <button class="tab" type="button" data-module="payroll">Nómina</button>
-        </nav>
-
-        <div id="modulePanel"></div>
-      </section>
-    </main>
-
+    <div class="app-shell" id="app"></div>
     <script src="app.js"></script>
   </body>
 </html>
