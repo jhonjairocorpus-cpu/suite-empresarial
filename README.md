@@ -16,6 +16,7 @@ Aplicacion PWA para operar una suite empresarial desde navegador o como app inst
 - Bot de respuestas rapidas con escalamiento a WhatsApp
 - Acciones comerciales por factura: PDF imprimible, WhatsApp, link de pago y marcar como pagada
 - Kardex valorizado para inventario
+- Modulo DIAN preparado para proveedor tecnologico, CUFE, XML, QR y trazabilidad
 - Configuracion multiempresa
 - Panel de activacion Supabase con estado de sesion, empresa vinculada y pendientes
 

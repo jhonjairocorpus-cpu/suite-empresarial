@@ -21,6 +21,7 @@ Esta suite ya tiene una base preparada para Supabase/PostgreSQL. La app publicad
 - `products`: inventario.
 - `invoices` e `invoice_items`: facturacion/POS.
 - `inventory_movements`: entradas, salidas y ajustes de inventario generados por facturas o compras.
+- `dian_events`: trazabilidad de envios, validaciones, rechazos y respuestas del proveedor DIAN.
 - `accounting_entries`: movimientos contables.
 - `employees`: nomina.
 - `tasks`: tareas operativas.
@@ -101,6 +102,7 @@ Con Supabase activo, la app ya:
 - Sincroniza cambios de empresa.
 - Actualiza estado de pago de facturas que vienen desde cloud.
 - Muestra estado de configuracion, sesion, empresa vinculada y pendientes.
+- Prepara campos DIAN en facturas: `dian_status`, `cufe`, `xml_url`, `qr_url`, `dian_response` y eventos.
 
 ## Siguiente implementacion
 
@@ -108,4 +110,5 @@ Con Supabase activo, la app ya:
 2. Agregar `customer_id` real en facturas desde el selector de clientes.
 3. Sincronizar POS, nomina y portal de clientes.
 4. Crear Edge Functions para DIAN, pagos y WhatsApp Business API.
-5. Mantener `localStorage` como cache offline.
+5. Elegir proveedor tecnologico DIAN y conectar token/API real para reemplazar el mock tecnico.
+6. Mantener `localStorage` como cache offline.

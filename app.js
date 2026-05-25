@@ -26,15 +26,29 @@ const defaultData = {
     pendingSync: 0,
     lastSync: "Sin sincronizar"
   },
+  dian: {
+    provider: "Proveedor tecnologico por definir",
+    environment: "Pruebas",
+    apiStatus: "Mock tecnico",
+    resolution: "187600000001",
+    prefix: "FE",
+    range: "1046 - 9999",
+    lastResponse: "Sin envios reales",
+    nextStep: "Seleccionar proveedor autorizado y conectar token API"
+  },
   users: [
     { name: "Administrador", email: "admin@empresa.com", role: "Propietario", status: "Activo" },
     { name: "Caja principal", email: "caja@empresa.com", role: "Cajero", status: "Invitado" },
     { name: "Contabilidad", email: "contabilidad@empresa.com", role: "Contador", status: "Invitado" }
   ],
   invoices: [
-    { id: "FE-1048", customer: "Drogueria Central", product: "Plancha industrial", quantity: 1, status: "Pagada", date: "2026-05-24", subtotal: 1280000, tax: 243200, dianStatus: "Validada", paymentLink: "https://pay.quantroxsystems.cloud/FE-1048" },
+    { id: "FE-1048", customer: "Drogueria Central", product: "Plancha industrial", quantity: 1, status: "Pagada", date: "2026-05-24", subtotal: 1280000, tax: 243200, dianStatus: "Validada", cufe: "CUFE-DEMO-FE1048", xmlUrl: "https://docs.quantroxsystems.cloud/xml/FE-1048.xml", qrUrl: "https://docs.quantroxsystems.cloud/qr/FE-1048.png", dianResponse: "Validacion simulada exitosa", paymentLink: "https://pay.quantroxsystems.cloud/FE-1048" },
     { id: "FE-1047", customer: "Mercado La 80", product: "Venta general", quantity: 1, status: "Pendiente", date: "2026-05-23", subtotal: 760000, tax: 144400, dianStatus: "Por enviar", paymentLink: "https://pay.quantroxsystems.cloud/FE-1047" },
-    { id: "FE-1046", customer: "Cafe Norte", product: "Servicio tecnico", quantity: 1, status: "Pagada", date: "2026-05-23", subtotal: 420000, tax: 79800, dianStatus: "Validada", paymentLink: "https://pay.quantroxsystems.cloud/FE-1046" }
+    { id: "FE-1046", customer: "Cafe Norte", product: "Servicio tecnico", quantity: 1, status: "Pagada", date: "2026-05-23", subtotal: 420000, tax: 79800, dianStatus: "Validada", cufe: "CUFE-DEMO-FE1046", xmlUrl: "https://docs.quantroxsystems.cloud/xml/FE-1046.xml", qrUrl: "https://docs.quantroxsystems.cloud/qr/FE-1046.png", dianResponse: "Validacion simulada exitosa", paymentLink: "https://pay.quantroxsystems.cloud/FE-1046" }
+  ],
+  dianEvents: [
+    { date: "2026-05-24", invoice: "FE-1048", event: "Factura validada", status: "Validada", response: "CUFE generado en modo demo" },
+    { date: "2026-05-23", invoice: "FE-1046", event: "Factura validada", status: "Validada", response: "XML y QR preparados" }
   ],
   pos: {
     register: "Caja principal",
@@ -126,6 +140,7 @@ const defaultData = {
       { q: "Portal cliente", a: "El Portal permite consultar facturas, pagos, estado de cuenta y soporte por WhatsApp.", nav: "portal" },
       { q: "Instalar app", a: "Desde Chrome o Edge usa Instalar. En iPhone abre Safari y usa Agregar a pantalla de inicio.", nav: "settings" },
       { q: "Supabase", a: "En Ajustes ves el estado cloud. Para activarlo hay que crear Supabase, ejecutar el SQL y poner URL + anon key.", nav: "settings" },
+      { q: "DIAN", a: "En el modulo DIAN preparas proveedor tecnologico, resolucion, CUFE, XML, QR y respuesta de validacion.", nav: "dian" },
       { q: "Pagos", a: "Los pagos estan preparados para integrar pasarela y links de cobro en el portal del cliente.", nav: "automations" },
       { q: "WhatsApp", a: "WhatsApp queda como canal de cobro, soporte y envio de reportes. El bot puede escalar a humano.", nav: "automations" },
       { q: "Soporte", a: "Puedes pedir soporte humano por WhatsApp desde el bot o desde Solicitar demo.", nav: "portal" }
@@ -136,6 +151,7 @@ const defaultData = {
 const moduleMeta = {
   home: { title: "Centro de control", eyebrow: "Operacion en vivo" },
   invoices: { title: "Facturacion electronica", eyebrow: "Ventas y DIAN" },
+  dian: { title: "Proveedor DIAN", eyebrow: "Cumplimiento electronico" },
   pos: { title: "POS inteligente", eyebrow: "Caja y pagos" },
   inventory: { title: "Inventario", eyebrow: "Stock y costos" },
   accounting: { title: "Contabilidad", eyebrow: "Balance y estados" },
@@ -152,6 +168,7 @@ const moduleMeta = {
 const navItems = [
   ["home", "Inicio", "H"],
   ["invoices", "Facturacion", "F"],
+  ["dian", "DIAN", "D"],
   ["pos", "POS", "P"],
   ["inventory", "Inventario", "I"],
   ["accounting", "Contabilidad", "C"],
@@ -378,6 +395,10 @@ async function loadCloudData() {
       status: item.status,
       dianStatus: item.dian_status || "Por enviar",
       paymentLink: item.payment_link || "",
+      cufe: item.cufe || "",
+      xmlUrl: item.xml_url || "",
+      qrUrl: item.qr_url || "",
+      dianResponse: item.dian_response || "",
       date: item.issued_at,
       subtotal: Number(item.subtotal || 0),
       tax: Number(item.tax || 0)
@@ -441,6 +462,10 @@ async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountin
     number: invoice.id,
     status: invoice.status,
     dian_status: invoice.dianStatus || "Por enviar",
+    cufe: invoice.cufe || null,
+    qr_url: invoice.qrUrl || null,
+    xml_url: invoice.xmlUrl || null,
+    dian_response: invoice.dianResponse || null,
     payment_link: getInvoicePaymentLink(invoice),
     subtotal: invoice.subtotal,
     tax: invoice.tax,
@@ -592,6 +617,27 @@ async function updateCloudInvoiceStatus(invoice) {
   }
 
   markCloudSynced(`Pago ${invoice.id}`);
+}
+
+async function updateCloudInvoiceDian(invoice) {
+  if (!canSyncCloud() || !invoice.dbId) {
+    return;
+  }
+
+  const { error } = await cloudClient.from("invoices").update({
+    dian_status: invoice.dianStatus,
+    cufe: invoice.cufe,
+    qr_url: invoice.qrUrl,
+    xml_url: invoice.xmlUrl,
+    dian_response: invoice.dianResponse
+  }).eq("id", invoice.dbId);
+
+  if (error) {
+    markCloudPending("DIAN", error);
+    return;
+  }
+
+  markCloudSynced(`DIAN ${invoice.id}`);
 }
 
 function applyBrandTheme() {
@@ -928,6 +974,7 @@ function renderActiveModule() {
   const renderers = {
     home: renderHome,
     invoices: renderInvoices,
+    dian: renderDian,
     pos: renderPos,
     inventory: renderInventory,
     accounting: renderAccounting,
@@ -961,10 +1008,47 @@ function renderInvoiceActions(invoice) {
   return `
     <div class="row-actions">
       <button class="mini-action" type="button" data-print-invoice="${escapeHtml(invoice.id)}">PDF</button>
+      ${invoice.dianStatus !== "Validada" ? `<button class="mini-action success" type="button" data-send-dian="${escapeHtml(invoice.id)}">DIAN</button>` : ""}
       <a class="mini-action" href="${getInvoiceWhatsAppUrl(invoice)}" target="_blank" rel="noopener">WhatsApp</a>
       ${invoice.status !== "Pagada" ? `<button class="mini-action success" type="button" data-mark-paid="${escapeHtml(invoice.id)}">Pagar</button>` : ""}
     </div>
   `;
+}
+
+function generateMockCufe(invoice) {
+  const source = `${invoice.id}-${invoice.customer}-${invoice.date}-${getInvoiceTotal(invoice)}`;
+  let hash = 0;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = ((hash << 5) - hash) + source.charCodeAt(index);
+    hash |= 0;
+  }
+  return `CUFE-DEMO-${Math.abs(hash).toString(16).toUpperCase().padStart(8, "0")}`;
+}
+
+async function sendInvoiceToDian(invoiceId) {
+  const invoice = data.invoices.find((item) => item.id === invoiceId);
+  if (!invoice) {
+    return;
+  }
+
+  invoice.dianStatus = "Validada";
+  invoice.cufe = invoice.cufe || generateMockCufe(invoice);
+  invoice.xmlUrl = invoice.xmlUrl || `https://docs.quantroxsystems.cloud/xml/${encodeURIComponent(invoice.id)}.xml`;
+  invoice.qrUrl = invoice.qrUrl || `https://docs.quantroxsystems.cloud/qr/${encodeURIComponent(invoice.id)}.png`;
+  invoice.dianResponse = `Validacion simulada con ${data.dian.provider}`;
+  data.dian.lastResponse = `${invoice.id} validada en modo ${data.dian.environment}`;
+  data.dianEvents.unshift({
+    date: new Date().toISOString().slice(0, 10),
+    invoice: invoice.id,
+    event: "Envio a DIAN",
+    status: invoice.dianStatus,
+    response: invoice.dianResponse
+  });
+
+  await updateCloudInvoiceDian(invoice);
+  saveData();
+  activeModule = "dian";
+  render();
 }
 
 function getKardexRows() {
@@ -1240,6 +1324,82 @@ function renderInvoices() {
       badge(item.status, item.status === "Pagada" ? "good" : "warn"),
       formatMoney(getInvoiceTotal(item)),
       renderInvoiceActions(item)
+    ]))}
+  `;
+}
+
+function renderDian() {
+  const validated = data.invoices.filter((item) => item.dianStatus === "Validada").length;
+  const pending = data.invoices.length - validated;
+  const progress = data.invoices.length ? Math.round((validated / data.invoices.length) * 100) : 0;
+  const nextInvoice = data.invoices.find((item) => item.dianStatus !== "Validada");
+
+  return `
+    <section class="summary-grid">
+      ${metric("Proveedor", data.dian.provider, data.dian.environment)}
+      ${metric("Facturas validadas", validated, `${progress}% del demo`)}
+      ${metric("Pendientes DIAN", pending, "Por enviar", pending ? "attention" : "")}
+      ${metric("Resolucion", data.dian.resolution, `${data.dian.prefix} ${data.dian.range}`)}
+    </section>
+    <section class="hero-panel app-hero">
+      <div>
+        <p class="eyebrow">Proveedor tecnologico</p>
+        <h2 class="balanced-title">Base lista para conectar factura electronica real.</h2>
+        <p>Este modulo prepara la integracion con un proveedor autorizado: token API, resolucion, prefijo, CUFE, XML, QR y respuesta de validacion.</p>
+        <div class="hero-actions">
+          ${nextInvoice ? `<button class="primary-button" type="button" data-send-dian="${escapeHtml(nextInvoice.id)}">Enviar ${escapeHtml(nextInvoice.id)} a DIAN</button>` : ""}
+          <button class="secondary-button" type="button" data-nav="invoices">Ver facturas</button>
+        </div>
+      </div>
+      <div class="command-center">
+        <span>Estado API</span>
+        <strong>${escapeHtml(data.dian.apiStatus)}</strong>
+        <div class="progress-track"><i style="width:${progress}%"></i></div>
+        <small>${escapeHtml(data.dian.nextStep)}</small>
+      </div>
+    </section>
+    <section class="dashboard-grid">
+      <article class="panel">
+        <h3>Configuracion DIAN <span class="panel-label">Preparado</span></h3>
+        <form class="form-grid" id="dianForm">
+          <label>Proveedor <input name="provider" value="${escapeHtml(data.dian.provider)}" required></label>
+          <label>Ambiente
+            <select name="environment">
+              <option ${data.dian.environment === "Pruebas" ? "selected" : ""}>Pruebas</option>
+              <option ${data.dian.environment === "Produccion" ? "selected" : ""}>Produccion</option>
+            </select>
+          </label>
+          <label>Resolucion <input name="resolution" value="${escapeHtml(data.dian.resolution)}" required></label>
+          <label>Prefijo <input name="prefix" value="${escapeHtml(data.dian.prefix)}" required></label>
+          <label>Rango <input name="range" value="${escapeHtml(data.dian.range)}" required></label>
+          <label>Estado API <input name="apiStatus" value="${escapeHtml(data.dian.apiStatus)}" required></label>
+          <button class="primary-button span-2" type="submit">Guardar configuracion</button>
+        </form>
+      </article>
+      <article class="panel">
+        <h3>Validacion requerida <span class="panel-label">Checklist</span></h3>
+        <div class="timeline">
+          <span><b>1. Proveedor autorizado</b><small>Elegir API, ambiente de pruebas y token seguro.</small></span>
+          <span><b>2. Resolucion DIAN</b><small>Prefijo, rango y numeracion habilitada.</small></span>
+          <span><b>3. Documento electronico</b><small>Generar XML, CUFE, QR y firma digital.</small></span>
+          <span><b>4. Respuesta</b><small>Guardar validacion, rechazo y trazabilidad.</small></span>
+        </div>
+      </article>
+    </section>
+    ${renderTable("Facturas para DIAN", ["Numero", "Cliente", "Estado", "CUFE", "Respuesta", "Accion"], data.invoices.map((item) => [
+      item.id,
+      item.customer,
+      badge(item.dianStatus || "Por enviar", item.dianStatus === "Validada" ? "good" : "warn"),
+      item.cufe || "Pendiente",
+      item.dianResponse || "Sin respuesta",
+      item.dianStatus !== "Validada" ? `<button class="mini-action success" type="button" data-send-dian="${escapeHtml(item.id)}">Enviar</button>` : `<button class="mini-action" type="button" data-nav="invoices">Ver</button>`
+    ]))}
+    ${renderTable("Eventos DIAN", ["Fecha", "Factura", "Evento", "Estado", "Respuesta"], data.dianEvents.map((item) => [
+      item.date,
+      item.invoice,
+      item.event,
+      badge(item.status, item.status === "Validada" ? "good" : "info"),
+      item.response
     ]))}
   `;
 }
@@ -1927,6 +2087,16 @@ function bindModuleEvents() {
         data.cloud.syncStatus = "Factura guardada localmente, sincronizacion pendiente";
       }
     },
+    dianForm(event) {
+      const form = new FormData(event.currentTarget);
+      data.dian.provider = String(form.get("provider")).trim();
+      data.dian.environment = String(form.get("environment"));
+      data.dian.resolution = String(form.get("resolution")).trim();
+      data.dian.prefix = String(form.get("prefix")).trim();
+      data.dian.range = String(form.get("range")).trim();
+      data.dian.apiStatus = String(form.get("apiStatus")).trim();
+      data.dian.lastResponse = "Configuracion actualizada";
+    },
     posForm(event) {
       const form = new FormData(event.currentTarget);
       data.pos.cart.push({
@@ -2104,6 +2274,12 @@ function bindModuleEvents() {
     });
   });
 
+  document.querySelectorAll("[data-send-dian]").forEach((button) => {
+    button.addEventListener("click", () => {
+      sendInvoiceToDian(button.dataset.sendDian);
+    });
+  });
+
   const botForm = document.querySelector("#botForm");
   if (botForm) {
     botForm.addEventListener("submit", (event) => {
@@ -2155,7 +2331,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=16").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=17").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });

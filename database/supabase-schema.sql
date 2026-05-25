@@ -55,6 +55,9 @@ create table if not exists public.invoices (
   dian_status text not null default 'Por enviar',
   cufe text,
   qr_url text,
+  xml_url text,
+  dian_response text,
+  dian_sent_at timestamptz,
   payment_link text,
   subtotal numeric(14,2) not null default 0,
   tax numeric(14,2) not null default 0,
@@ -67,6 +70,9 @@ create table if not exists public.invoices (
 alter table public.invoices add column if not exists dian_status text not null default 'Por enviar';
 alter table public.invoices add column if not exists cufe text;
 alter table public.invoices add column if not exists qr_url text;
+alter table public.invoices add column if not exists xml_url text;
+alter table public.invoices add column if not exists dian_response text;
+alter table public.invoices add column if not exists dian_sent_at timestamptz;
 alter table public.invoices add column if not exists payment_link text;
 
 create table if not exists public.invoice_items (
@@ -87,6 +93,17 @@ create table if not exists public.inventory_movements (
   quantity numeric(14,2) not null,
   origin text not null,
   movement_date date not null default current_date,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.dian_events (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  invoice_id uuid references public.invoices(id) on delete set null,
+  invoice_number text not null,
+  event text not null,
+  status text not null,
+  response text,
   created_at timestamptz not null default now()
 );
 
@@ -142,6 +159,7 @@ create index if not exists idx_customers_company_id on public.customers(company_
 create index if not exists idx_products_company_id on public.products(company_id);
 create index if not exists idx_invoices_company_id on public.invoices(company_id);
 create index if not exists idx_inventory_movements_company_id on public.inventory_movements(company_id);
+create index if not exists idx_dian_events_company_id on public.dian_events(company_id);
 create index if not exists idx_warehouses_company_id on public.warehouses(company_id);
 create index if not exists idx_price_lists_company_id on public.price_lists(company_id);
 create index if not exists idx_accounting_entries_company_id on public.accounting_entries(company_id);
@@ -155,6 +173,7 @@ alter table public.products enable row level security;
 alter table public.invoices enable row level security;
 alter table public.invoice_items enable row level security;
 alter table public.inventory_movements enable row level security;
+alter table public.dian_events enable row level security;
 alter table public.warehouses enable row level security;
 alter table public.price_lists enable row level security;
 alter table public.accounting_entries enable row level security;
@@ -218,6 +237,11 @@ with check (
 
 create policy "inventory_movements_company_access"
 on public.inventory_movements for all
+using (company_id = public.current_company_id())
+with check (company_id = public.current_company_id());
+
+create policy "dian_events_company_access"
+on public.dian_events for all
 using (company_id = public.current_company_id())
 with check (company_id = public.current_company_id());
 
