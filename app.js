@@ -102,6 +102,11 @@ const defaultData = {
     { text: "Validar stock bajo", done: false },
     { text: "Enviar reporte semanal", done: true }
   ],
+  activityLogs: [
+    { date: "2026-05-24T15:30:00.000Z", user: "Administrador", area: "Facturacion", action: "Factura creada", detail: "FE-1048 desconto inventario y registro ingreso" },
+    { date: "2026-05-24T15:36:00.000Z", user: "Administrador", area: "DIAN", action: "Validacion mock", detail: "FE-1048 validada en modo prueba" },
+    { date: "2026-05-23T10:12:00.000Z", user: "Inventario", area: "Inventario", action: "Entrada registrada", detail: "Compra proveedor agrego 3 unidades" }
+  ],
   assistant: {
     focus: "Crecimiento rentable",
     lastRun: "Analisis demo"
@@ -337,7 +342,8 @@ async function loadCloudData() {
     accountingResult,
     employeesResult,
     tasksResult,
-    movementsResult
+    movementsResult,
+    activityResult
   ] = await Promise.all([
     cloudClient.from("companies").select("*").eq("id", companyId).single(),
     cloudClient.from("customers").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -346,7 +352,8 @@ async function loadCloudData() {
     cloudClient.from("accounting_entries").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("employees").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("tasks").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
-    cloudClient.from("inventory_movements").select("*").eq("company_id", companyId).order("created_at", { ascending: false })
+    cloudClient.from("inventory_movements").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("activity_logs").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(80)
   ]);
 
   if (companyResult.data) {
@@ -454,6 +461,17 @@ async function loadCloudData() {
     }));
   }
 
+  if (activityResult.data?.length) {
+    data.activityLogs = activityResult.data.map((item) => ({
+      id: item.id,
+      date: item.created_at,
+      user: item.user_email || "Usuario cloud",
+      area: item.area,
+      action: item.action,
+      detail: item.detail
+    }));
+  }
+
   data.cloud.mode = "Cloud conectado";
   data.cloud.syncStatus = "Datos sincronizados";
   data.cloud.lastBackup = new Date().toLocaleString("es-CO");
@@ -520,6 +538,37 @@ function markCloudPending(label, error) {
   data.cloud.pendingSync = Number(data.cloud.pendingSync || 0) + 1;
   data.cloud.syncStatus = `${label} pendiente`;
   cloudError = error?.message || cloudError;
+}
+
+function getCurrentUserLabel() {
+  return cloudSession?.user?.email || data.company.user || "Usuario local";
+}
+
+async function recordActivity(area, action, detail) {
+  const activity = {
+    date: new Date().toISOString(),
+    user: getCurrentUserLabel(),
+    area,
+    action,
+    detail
+  };
+
+  data.activityLogs = [activity, ...(data.activityLogs || [])].slice(0, 80);
+
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  const { data: inserted } = await cloudClient.from("activity_logs").insert({
+    company_id: data.company.id,
+    user_email: activity.user,
+    area: activity.area,
+    action: activity.action,
+    detail: activity.detail,
+    created_at: activity.date
+  }).select("id").single();
+
+  activity.id = inserted?.id || activity.id;
 }
 
 async function syncAccountingEntryToCloud(entry) {
@@ -716,6 +765,17 @@ function saveData() {
 
 function formatMoney(value) {
   return money.format(Number(value || 0));
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "Sin fecha";
+  }
+
+  return new Intl.DateTimeFormat("es-CO", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }
 
 function escapeHtml(value) {
@@ -1214,6 +1274,7 @@ async function sendInvoiceToDian(invoiceId) {
   });
 
   await updateCloudInvoiceDian(invoice);
+  await recordActivity("DIAN", "Factura validada", `${invoice.id} quedo en ${invoice.dianStatus}`);
   saveData();
   activeModule = "dian";
   render();
@@ -1384,6 +1445,7 @@ async function markInvoicePaid(invoiceId) {
   invoice.status = "Pagada";
   data.tasks.unshift({ text: `Conciliar pago de ${invoice.id}`, done: false });
   await updateCloudInvoiceStatus(invoice);
+  await recordActivity("Facturacion", "Pago marcado", `${invoice.id} marcada como pagada`);
   saveData();
   render();
 }
@@ -2255,6 +2317,13 @@ function renderSettings() {
       item.role,
       badge(item.status, item.status === "Activo" ? "good" : "warn")
     ]))}
+    ${renderTable("Historial de cambios", ["Fecha", "Usuario", "Modulo", "Accion", "Detalle"], (data.activityLogs || []).slice(0, 25).map((item) => [
+      formatDateTime(item.date),
+      item.user,
+      item.area,
+      badge(item.action, "info"),
+      item.detail
+    ]))}
     ${renderTable("Checklist DIAN y documentos", ["Documento", "Responsable", "Estado"], data.compliance.map((item) => [
       item.item,
       item.owner,
@@ -2353,8 +2422,9 @@ function bindModuleEvents() {
         cloudError = error.message || "No se pudo sincronizar la factura.";
         data.cloud.syncStatus = "Factura guardada localmente, sincronizacion pendiente";
       }
+      await recordActivity("Facturacion", "Factura creada", `${invoice.id} vendio ${quantity} x ${product.name}`);
     },
-    dianForm(event) {
+    async dianForm(event) {
       const form = new FormData(event.currentTarget);
       data.dian.provider = String(form.get("provider")).trim();
       data.dian.environment = String(form.get("environment"));
@@ -2363,8 +2433,9 @@ function bindModuleEvents() {
       data.dian.range = String(form.get("range")).trim();
       data.dian.apiStatus = String(form.get("apiStatus")).trim();
       data.dian.lastResponse = "Configuracion actualizada";
+      await recordActivity("DIAN", "Configuracion actualizada", `${data.dian.provider} en ${data.dian.environment}`);
     },
-    posForm(event) {
+    async posForm(event) {
       const form = new FormData(event.currentTarget);
       data.pos.cart.push({
         sku: `POS-${Date.now().toString().slice(-4)}`,
@@ -2372,6 +2443,7 @@ function bindModuleEvents() {
         quantity: Number(form.get("quantity")),
         price: Number(form.get("price"))
       });
+      await recordActivity("POS", "Item agregado", String(form.get("name")).trim());
     },
     async inventoryForm(event) {
       const form = new FormData(event.currentTarget);
@@ -2385,6 +2457,7 @@ function bindModuleEvents() {
       };
       data.inventory.unshift(product);
       await syncProductToCloud(product);
+      await recordActivity("Inventario", "Producto creado", `${product.sku} - ${product.name}`);
     },
     async accountingForm(event) {
       const form = new FormData(event.currentTarget);
@@ -2398,8 +2471,9 @@ function bindModuleEvents() {
       };
       data.accounting.unshift(entry);
       await syncAccountingEntryToCloud(entry);
+      await recordActivity("Contabilidad", "Movimiento registrado", `${entry.type}: ${entry.detail}`);
     },
-    payrollForm(event) {
+    async payrollForm(event) {
       const form = new FormData(event.currentTarget);
       data.payroll.push({
         name: String(form.get("name")).trim(),
@@ -2407,6 +2481,7 @@ function bindModuleEvents() {
         salary: Number(form.get("salary")),
         status: "Activa"
       });
+      await recordActivity("Nomina", "Empleado agregado", String(form.get("name")).trim());
     },
     async customerForm(event) {
       const form = new FormData(event.currentTarget);
@@ -2418,6 +2493,7 @@ function bindModuleEvents() {
       };
       data.customers.push(customer);
       await syncCustomerToCloud(customer);
+      await recordActivity("Clientes", "Cliente creado", customer.name);
     },
     async settingsForm(event) {
       const form = new FormData(event.currentTarget);
@@ -2429,8 +2505,9 @@ function bindModuleEvents() {
       data.company.industry = String(form.get("industry")).trim();
       data.company.accent = String(form.get("accent"));
       await syncCompanyToCloud();
+      await recordActivity("Ajustes", "Empresa actualizada", data.company.name);
     },
-    userForm(event) {
+    async userForm(event) {
       const form = new FormData(event.currentTarget);
       data.users.push({
         name: String(form.get("name")).trim(),
@@ -2438,6 +2515,7 @@ function bindModuleEvents() {
         role: String(form.get("role")),
         status: "Invitado"
       });
+      await recordActivity("Ajustes", "Usuario preparado", String(form.get("email")).trim());
     }
   };
 
@@ -2456,8 +2534,10 @@ function bindModuleEvents() {
   });
 
   document.querySelectorAll("[data-task]").forEach((checkbox) => {
-    checkbox.addEventListener("change", () => {
-      data.tasks[Number(checkbox.dataset.task)].done = checkbox.checked;
+    checkbox.addEventListener("change", async () => {
+      const task = data.tasks[Number(checkbox.dataset.task)];
+      task.done = checkbox.checked;
+      await recordActivity("Tareas", checkbox.checked ? "Tarea completada" : "Tarea reabierta", task.text);
       saveData();
     });
   });
@@ -2475,8 +2555,9 @@ function bindModuleEvents() {
 
   const samplePos = document.querySelector("[data-add-sample-pos]");
   if (samplePos) {
-    samplePos.addEventListener("click", () => {
+    samplePos.addEventListener("click", async () => {
       data.pos.cart.push({ sku: "PRD-003", name: "Impresora POS", quantity: 1, price: 318000 });
+      await recordActivity("POS", "Producto demo agregado", "Impresora POS");
       saveData();
       render();
     });
@@ -2484,19 +2565,21 @@ function bindModuleEvents() {
 
   const clearPos = document.querySelector("[data-clear-pos]");
   if (clearPos) {
-    clearPos.addEventListener("click", () => {
+    clearPos.addEventListener("click", async () => {
       data.pos.cart = [];
+      await recordActivity("POS", "Caja limpiada", "Carrito POS vaciado");
       saveData();
       render();
     });
   }
 
   document.querySelectorAll("[data-add-task]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       data.tasks.unshift({
         text: button.dataset.addTask,
         done: false
       });
+      await recordActivity("Tareas", "Tarea creada", button.dataset.addTask);
       saveData();
       activeModule = "home";
       render();
@@ -2505,12 +2588,13 @@ function bindModuleEvents() {
 
   const generatePlan = document.querySelector("[data-generate-plan]");
   if (generatePlan) {
-    generatePlan.addEventListener("click", () => {
+    generatePlan.addEventListener("click", async () => {
       const newTasks = getAssistantInsights()
         .filter((item) => item.tone !== "good")
         .map((item) => ({ text: item.action, done: false }));
       data.tasks = [...newTasks, ...data.tasks];
       data.assistant.lastRun = new Date().toISOString();
+      await recordActivity("Asistente", "Plan generado", `${newTasks.length} acciones sugeridas`);
       saveData();
       render();
     });
@@ -2518,12 +2602,13 @@ function bindModuleEvents() {
 
   const runAutomation = document.querySelector("[data-run-automation]");
   if (runAutomation) {
-    runAutomation.addEventListener("click", () => {
+    runAutomation.addEventListener("click", async () => {
       data.tasks.unshift(
         { text: "Enviar resumen automatico por WhatsApp", done: false },
         { text: "Revisar integracion de pagos para portal cliente", done: false },
         { text: "Preparar sincronizacion e-commerce con inventario", done: false }
       );
+      await recordActivity("Automatizaciones", "Playbook ejecutado", "Se crearon tareas automaticas");
       saveData();
       activeModule = "home";
       render();

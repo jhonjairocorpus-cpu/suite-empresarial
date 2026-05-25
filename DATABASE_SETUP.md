@@ -25,6 +25,7 @@ Esta suite ya tiene una base preparada para Supabase/PostgreSQL. La app publicad
 - `accounting_entries`: movimientos contables con fecha y categoria para comparativos de ventas, gastos y utilidad.
 - `employees`: nomina.
 - `tasks`: tareas operativas.
+- `activity_logs`: bitacora de cambios por usuario, modulo, accion y fecha.
 - `warehouses`: bodegas preparadas.
 - `price_lists`: listas de precios preparadas.
 
@@ -101,6 +102,7 @@ Con Supabase activo, la app ya:
 - Sincroniza clientes nuevos.
 - Sincroniza cambios de empresa.
 - Actualiza estado de pago de facturas que vienen desde cloud.
+- Registra bitacora de cambios para trazabilidad entre oficina, celular y web.
 - Muestra estado de configuracion, sesion, empresa vinculada y pendientes.
 - Prepara campos DIAN en facturas: `dian_status`, `cufe`, `xml_url`, `qr_url`, `dian_response` y eventos.
 

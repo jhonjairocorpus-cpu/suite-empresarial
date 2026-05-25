@@ -155,6 +155,16 @@ create table if not exists public.tasks (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  user_email text not null,
+  area text not null,
+  action text not null,
+  detail text not null,
+  created_at timestamptz not null default now()
+);
+
 alter table public.accounting_entries
 add column if not exists category text not null default 'General';
 
@@ -169,6 +179,7 @@ create index if not exists idx_price_lists_company_id on public.price_lists(comp
 create index if not exists idx_accounting_entries_company_id on public.accounting_entries(company_id);
 create index if not exists idx_employees_company_id on public.employees(company_id);
 create index if not exists idx_tasks_company_id on public.tasks(company_id);
+create index if not exists idx_activity_logs_company_created on public.activity_logs(company_id, created_at desc);
 
 alter table public.companies enable row level security;
 alter table public.profiles enable row level security;
@@ -183,6 +194,7 @@ alter table public.price_lists enable row level security;
 alter table public.accounting_entries enable row level security;
 alter table public.employees enable row level security;
 alter table public.tasks enable row level security;
+alter table public.activity_logs enable row level security;
 
 create or replace function public.current_company_id()
 returns uuid
@@ -271,5 +283,10 @@ with check (company_id = public.current_company_id());
 
 create policy "tasks_company_access"
 on public.tasks for all
+using (company_id = public.current_company_id())
+with check (company_id = public.current_company_id());
+
+create policy "activity_logs_company_access"
+on public.activity_logs for all
 using (company_id = public.current_company_id())
 with check (company_id = public.current_company_id());
