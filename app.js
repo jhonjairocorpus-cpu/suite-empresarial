@@ -19,7 +19,7 @@ const defaultData = {
     accent: "#0f766e"
   },
   cloud: {
-    mode: "Demo local",
+    mode: "Modo local",
     database: "Supabase/PostgreSQL",
     syncStatus: "Pendiente de conexion",
     lastBackup: "Sin respaldo cloud",
@@ -47,7 +47,7 @@ const defaultData = {
     { id: "FE-1046", customer: "Cafe Norte", product: "Servicio tecnico", quantity: 1, status: "Pagada", date: "2026-05-23", subtotal: 420000, tax: 79800, dianStatus: "Validada", cufe: "CUFE-DEMO-FE1046", xmlUrl: "https://docs.quantroxsystems.cloud/xml/FE-1046.xml", qrUrl: "https://docs.quantroxsystems.cloud/qr/FE-1046.png", dianResponse: "Validacion simulada exitosa", paymentLink: "https://pay.quantroxsystems.cloud/FE-1046" }
   ],
   dianEvents: [
-    { date: "2026-05-24", invoice: "FE-1048", event: "Factura validada", status: "Validada", response: "CUFE generado en modo demo" },
+    { date: "2026-05-24", invoice: "FE-1048", event: "Factura validada", status: "Validada", response: "CUFE generado en modo prueba" },
     { date: "2026-05-23", invoice: "FE-1046", event: "Factura validada", status: "Validada", response: "XML y QR preparados" }
   ],
   pos: {
@@ -109,7 +109,7 @@ const defaultData = {
   ],
   assistant: {
     focus: "Crecimiento rentable",
-    lastRun: "Analisis demo"
+    lastRun: "Analisis operativo"
   },
   playbooks: [
     { title: "Cobro inteligente", area: "Cartera", impact: "Mejora flujo de caja", enabled: true },
@@ -156,7 +156,7 @@ const defaultData = {
       { q: "DIAN", a: "En el modulo DIAN preparas proveedor tecnologico, resolucion, CUFE, XML, QR y respuesta de validacion.", nav: "dian" },
       { q: "Pagos", a: "Los pagos estan preparados para integrar pasarela y links de cobro en el portal del cliente.", nav: "automations" },
       { q: "WhatsApp", a: "WhatsApp queda como canal de cobro, soporte y envio de reportes. El bot puede escalar a humano.", nav: "automations" },
-      { q: "Soporte", a: "Puedes pedir soporte humano por WhatsApp desde el bot o desde Solicitar demo.", nav: "portal" }
+      { q: "Soporte", a: "Puedes pedir soporte humano por WhatsApp desde el bot o desde el boton Soporte.", nav: "portal" }
     ]
   }
 };
@@ -232,7 +232,7 @@ function isPasswordRecoveryUrl() {
 function initCloudClient() {
   if (!isCloudConfigured()) {
     cloudReady = false;
-    data.cloud.mode = "Demo local";
+    data.cloud.mode = "Modo local";
     data.cloud.syncStatus = "Credenciales Supabase pendientes";
     return;
   }
@@ -990,7 +990,7 @@ function render() {
         </div>
         <div class="top-actions">
           <button class="install-button hidden" id="installButton" type="button">Instalar</button>
-          <a class="contact-button" href="https://wa.me/573218247072?text=Hola%20Quantrox%20Systems,%20quiero%20una%20demo%20de%20la%20Suite%20Empresarial" target="_blank" rel="noopener">Solicitar demo</a>
+          <a class="contact-button" href="https://wa.me/573218247072?text=Hola%20Quantrox%20Systems,%20necesito%20soporte%20con%20mi%20Suite%20Empresarial" target="_blank" rel="noopener">Soporte</a>
           <button class="avatar-button" type="button" data-action="logout">${escapeHtml(data.company.user.charAt(0))}</button>
         </div>
       </header>
@@ -1023,7 +1023,7 @@ function renderLogin() {
         </div>
       </section>
       <section class="login-panel">
-        <p class="eyebrow">${cloudConfigured ? "Acceso cloud" : "Acceso demo"}</p>
+        <p class="eyebrow">${cloudConfigured ? "Acceso seguro" : "Acceso local"}</p>
         <h2>${cloudConfigured ? "Entrar con Supabase" : "Entrar a la suite"}</h2>
         ${cloudNotice ? `<p class="cloud-notice">${escapeHtml(cloudNotice)}</p>` : ""}
         ${cloudError ? `<p class="cloud-error">${escapeHtml(cloudError)}</p>` : ""}
@@ -1031,9 +1031,9 @@ function renderLogin() {
           ${cloudConfigured ? `
             <label>Correo <input name="email" required type="email" placeholder="usuario@empresa.com"></label>
             <label>Clave <input name="password" required type="password" placeholder="Clave Supabase"></label>
-            <button class="primary-button" type="submit">Ingresar en cloud</button>
+            <button class="primary-button" type="submit">Ingresar</button>
             <button class="text-button" type="button" data-reset-password>Recuperar contraseña</button>
-            <button class="secondary-button" type="button" data-demo-login>Usar demo local</button>
+            <button class="secondary-button" type="button" data-demo-login>Usar modo local</button>
           ` : `
             <label>Empresa <input name="company" value="${escapeHtml(data.company.name)}" required></label>
             <label>Usuario <input name="user" value="${escapeHtml(data.company.user)}" required></label>
@@ -1076,8 +1076,8 @@ function renderLogin() {
     demoButton.addEventListener("click", () => {
       cloudSession = null;
       authenticated = true;
-      data.cloud.mode = "Demo local";
-      data.cloud.syncStatus = "Usando demo aunque Supabase este configurado";
+      data.cloud.mode = "Modo local";
+      data.cloud.syncStatus = "Usando modo local en este dispositivo";
       localStorage.setItem("quantrox-suite-auth", "true");
       saveData();
       render();
@@ -1539,7 +1539,7 @@ function renderInvoices() {
           <div class="progress-track"><i style="width:${dianProgress}%"></i></div>
         </div>
         <ul class="insight-list">
-          <li><span>Modo actual</span><b>Demo comercial</b></li>
+          <li><span>Modo actual</span><b>Operacion del cliente</b></li>
           <li><span>Siguiente paso</span><b>Proveedor autorizado por API</b></li>
           <li><span>Salida</span><b>PDF, XML y CUFE</b></li>
           <li><span>Inventario</span><b>Descuento automatico</b></li>
@@ -1567,7 +1567,7 @@ function renderDian() {
   return `
     <section class="summary-grid">
       ${metric("Proveedor", data.dian.provider, data.dian.environment)}
-      ${metric("Facturas validadas", validated, `${progress}% del demo`)}
+      ${metric("Facturas validadas", validated, `${progress}% del flujo`)}
       ${metric("Pendientes DIAN", pending, "Por enviar", pending ? "attention" : "")}
       ${metric("Resolucion", data.dian.resolution, `${data.dian.prefix} ${data.dian.range}`)}
     </section>
@@ -1652,7 +1652,7 @@ function renderPos() {
           <button class="primary-button" type="submit">+</button>
         </form>
         <div class="quick-actions">
-          <button class="quick-button" type="button" data-add-sample-pos>Producto demo</button>
+          <button class="quick-button" type="button" data-add-sample-pos>Producto rapido</button>
           <button class="quick-button danger" type="button" data-clear-pos>Limpiar</button>
         </div>
       </article>
@@ -1933,7 +1933,7 @@ function getAssistantInsights() {
       tone: pendingInvoices.length ? "warn" : "good",
       detail: pendingInvoices.length
         ? `Hay ${pendingInvoices.length} factura(s) pendiente(s) por ${formatMoney(totals.pending)}.`
-        : "No hay facturas pendientes en la demo.",
+        : "No hay facturas pendientes.",
       action: pendingInvoices.length ? "Enviar recordatorio de pago" : "Mantener seguimiento semanal"
     },
     {
@@ -2224,7 +2224,7 @@ function renderSettings() {
   const cloudConfigured = isCloudConfigured();
   const cloudSteps = [
     { label: "Credenciales", value: cloudConfigured ? "Listas" : "Pendientes", tone: cloudConfigured ? "good" : "warn" },
-    { label: "Sesion", value: cloudSession ? "Activa" : "Demo", tone: cloudSession ? "good" : "info" },
+    { label: "Sesion", value: cloudSession ? "Activa" : "Local", tone: cloudSession ? "good" : "info" },
     { label: "Empresa cloud", value: data.company.id ? "Vinculada" : "Sin ID", tone: data.company.id ? "good" : "warn" },
     { label: "Pendientes", value: Number(data.cloud.pendingSync || 0), tone: Number(data.cloud.pendingSync || 0) ? "warn" : "good" }
   ];
@@ -2557,7 +2557,7 @@ function bindModuleEvents() {
   if (samplePos) {
     samplePos.addEventListener("click", async () => {
       data.pos.cart.push({ sku: "PRD-003", name: "Impresora POS", quantity: 1, price: 318000 });
-      await recordActivity("POS", "Producto demo agregado", "Impresora POS");
+      await recordActivity("POS", "Producto rapido agregado", "Impresora POS");
       saveData();
       render();
     });
