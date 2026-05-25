@@ -5,6 +5,7 @@ Aplicacion PWA para operar una suite empresarial desde navegador o como app inst
 - Facturacion electronica comercial
 - POS y caja
 - Inventario
+- Facturacion conectada al inventario con descuento automatico de stock
 - Contabilidad
 - Nomina
 - Clientes / CRM

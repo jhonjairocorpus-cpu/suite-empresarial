@@ -1,4 +1,4 @@
-const STORAGE_KEY = "quantrox-suite-data-v6";
+const STORAGE_KEY = "quantrox-suite-data-v7";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -48,6 +48,10 @@ const defaultData = {
     { sku: "PRD-002", name: "Bascula digital", stock: 5, min: 8, cost: 98000, price: 155000 },
     { sku: "PRD-003", name: "Impresora POS", stock: 11, min: 5, cost: 210000, price: 318000 },
     { sku: "SRV-014", name: "Servicio tecnico", stock: 999, min: 1, cost: 65000, price: 180000 }
+  ],
+  inventoryMovements: [
+    { date: "2026-05-24", type: "Salida", product: "Plancha industrial", quantity: 1, origin: "Factura FE-1048" },
+    { date: "2026-05-23", type: "Entrada", product: "Impresora POS", quantity: 3, origin: "Compra proveedor" }
   ],
   accounting: [
     { detail: "Ventas facturadas", account: "Ingresos", type: "Ingreso", amount: 3120000 },
@@ -202,6 +206,18 @@ function getTotals() {
     posTax: Math.round(posTotal * 0.19),
     margin: income ? Math.round(((income - expense) / income) * 100) : 0
   };
+}
+
+function getProductBySku(sku) {
+  return data.inventory.find((item) => item.sku === sku);
+}
+
+function getInventoryProductOptions(selectedSku = "") {
+  return data.inventory.map((item) => `
+    <option value="${escapeHtml(item.sku)}" ${item.sku === selectedSku ? "selected" : ""}>
+      ${escapeHtml(item.name)} - stock ${item.stock} - ${formatMoney(item.price)}
+    </option>
+  `).join("");
 }
 
 function badge(text, tone = "good") {
@@ -384,18 +400,25 @@ function renderHome() {
 
 function renderInvoices() {
   const totals = getTotals();
+  const firstProduct = data.inventory[0];
   return `
     <section class="summary-grid">
       ${metric("Facturado", formatMoney(totals.sales), `${data.invoices.length} documentos`)}
       ${metric("Pagado", formatMoney(totals.paid), "Recaudo confirmado")}
       ${metric("Pendiente", formatMoney(totals.pending), "Cartera activa", totals.pending > 0 ? "attention" : "")}
+      ${metric("Stock conectado", data.inventoryMovements.length, "Movimientos inventario")}
     </section>
     <section class="dashboard-grid">
       <article class="panel">
-        <h3>Nueva factura <span class="panel-label">Electronica</span></h3>
+        <h3>Nueva factura <span class="panel-label">Inventario conectado</span></h3>
         <form class="form-grid" id="invoiceForm">
           <label>Cliente <input name="customer" required placeholder="Nombre del cliente"></label>
-          <label>Subtotal <input name="subtotal" required min="0" type="number" placeholder="0"></label>
+          <label>Producto
+            <select name="productSku" required>
+              ${getInventoryProductOptions(firstProduct ? firstProduct.sku : "")}
+            </select>
+          </label>
+          <label>Cantidad <input name="quantity" required min="1" type="number" value="1"></label>
           <label>Estado
             <select name="status"><option>Pagada</option><option>Pendiente</option></select>
           </label>
@@ -408,12 +431,14 @@ function renderInvoices() {
           <li><span>Modo actual</span><b>Demo comercial</b></li>
           <li><span>Siguiente paso</span><b>Proveedor autorizado por API</b></li>
           <li><span>Salida</span><b>PDF, XML y CUFE</b></li>
+          <li><span>Inventario</span><b>Descuento automatico</b></li>
         </ul>
       </article>
     </section>
-    ${renderTable("Facturas recientes", ["Numero", "Cliente", "Estado", "Total"], data.invoices.map((item) => [
+    ${renderTable("Facturas recientes", ["Numero", "Cliente", "Producto", "Estado", "Total"], data.invoices.map((item) => [
       item.id,
       item.customer,
+      item.product || "Venta general",
       badge(item.status, item.status === "Pagada" ? "good" : "warn"),
       formatMoney(item.subtotal + item.tax)
     ]))}
@@ -472,6 +497,13 @@ function renderInventory() {
         <button class="primary-button" type="submit">Guardar</button>
       </form>
     </section>
+    ${renderTable("Movimientos de inventario", ["Fecha", "Tipo", "Producto", "Cantidad", "Origen"], data.inventoryMovements.map((item) => [
+      item.date,
+      badge(item.type, item.type === "Entrada" ? "good" : "warn"),
+      item.product,
+      item.quantity,
+      item.origin
+    ]))}
     ${renderTable("Inventario activo", ["SKU", "Producto", "Stock", "Precio"], data.inventory.map((item) => [
       item.sku,
       item.name,
@@ -880,14 +912,51 @@ function bindModuleEvents() {
   const formHandlers = {
     invoiceForm(event) {
       const form = new FormData(event.currentTarget);
-      const subtotal = Number(form.get("subtotal"));
+      const sku = String(form.get("productSku"));
+      const quantity = Number(form.get("quantity"));
+      const product = getProductBySku(sku);
+
+      if (!product) {
+        window.alert("Selecciona un producto valido del inventario.");
+        return;
+      }
+
+      if (quantity > product.stock) {
+        data.tasks.unshift({
+          text: `Revisar stock insuficiente de ${product.name}`,
+          done: false
+        });
+        saveData();
+        window.alert(`Stock insuficiente. ${product.name} tiene ${product.stock} unidad(es) disponibles.`);
+        return;
+      }
+
+      const invoiceNumber = `FE-${1049 + data.invoices.length}`;
+      const subtotal = product.price * quantity;
+      product.stock -= quantity;
       data.invoices.unshift({
-        id: `FE-${1049 + data.invoices.length}`,
+        id: invoiceNumber,
         customer: String(form.get("customer")).trim(),
+        product: product.name,
+        sku: product.sku,
+        quantity,
         status: String(form.get("status")),
         date: new Date().toISOString().slice(0, 10),
         subtotal,
         tax: Math.round(subtotal * 0.19)
+      });
+      data.inventoryMovements.unshift({
+        date: new Date().toISOString().slice(0, 10),
+        type: "Salida",
+        product: product.name,
+        quantity,
+        origin: `Factura ${invoiceNumber}`
+      });
+      data.accounting.unshift({
+        detail: `Venta ${invoiceNumber} - ${product.name}`,
+        account: "Ingresos",
+        type: "Ingreso",
+        amount: subtotal
       });
     },
     posForm(event) {
@@ -1061,7 +1130,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=7").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=8").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });

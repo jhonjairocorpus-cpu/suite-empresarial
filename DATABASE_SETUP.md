@@ -18,6 +18,7 @@ Esta suite ya tiene una base preparada para Supabase/PostgreSQL. La app publicad
 - `customers`: clientes comerciales.
 - `products`: inventario.
 - `invoices` e `invoice_items`: facturacion/POS.
+- `inventory_movements`: entradas, salidas y ajustes de inventario generados por facturas o compras.
 - `accounting_entries`: movimientos contables.
 - `employees`: nomina.
 - `tasks`: tareas operativas.

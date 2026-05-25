@@ -70,6 +70,17 @@ create table if not exists public.invoice_items (
   line_total numeric(14,2) generated always as (quantity * unit_price) stored
 );
 
+create table if not exists public.inventory_movements (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  product_id uuid references public.products(id) on delete set null,
+  type text not null check (type in ('Entrada', 'Salida', 'Ajuste')),
+  quantity numeric(14,2) not null,
+  origin text not null,
+  movement_date date not null default current_date,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.accounting_entries (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
@@ -103,6 +114,7 @@ create index if not exists idx_profiles_company_id on public.profiles(company_id
 create index if not exists idx_customers_company_id on public.customers(company_id);
 create index if not exists idx_products_company_id on public.products(company_id);
 create index if not exists idx_invoices_company_id on public.invoices(company_id);
+create index if not exists idx_inventory_movements_company_id on public.inventory_movements(company_id);
 create index if not exists idx_accounting_entries_company_id on public.accounting_entries(company_id);
 create index if not exists idx_employees_company_id on public.employees(company_id);
 create index if not exists idx_tasks_company_id on public.tasks(company_id);
@@ -113,6 +125,7 @@ alter table public.customers enable row level security;
 alter table public.products enable row level security;
 alter table public.invoices enable row level security;
 alter table public.invoice_items enable row level security;
+alter table public.inventory_movements enable row level security;
 alter table public.accounting_entries enable row level security;
 alter table public.employees enable row level security;
 alter table public.tasks enable row level security;
@@ -172,6 +185,11 @@ with check (
   )
 );
 
+create policy "inventory_movements_company_access"
+on public.inventory_movements for all
+using (company_id = public.current_company_id())
+with check (company_id = public.current_company_id());
+
 create policy "accounting_entries_company_access"
 on public.accounting_entries for all
 using (company_id = public.current_company_id())
@@ -186,4 +204,3 @@ create policy "tasks_company_access"
 on public.tasks for all
 using (company_id = public.current_company_id())
 with check (company_id = public.current_company_id());
-
