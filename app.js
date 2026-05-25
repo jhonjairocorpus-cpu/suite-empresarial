@@ -457,7 +457,7 @@ async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountin
     return;
   }
 
-  const { error: invoiceError } = await cloudClient.from("invoices").insert({
+  const { data: insertedInvoice, error: invoiceError } = await cloudClient.from("invoices").insert({
     company_id: data.company.id,
     number: invoice.id,
     status: invoice.status,
@@ -470,11 +470,13 @@ async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountin
     subtotal: invoice.subtotal,
     tax: invoice.tax,
     issued_at: invoice.date
-  });
+  }).select("id").single();
 
   if (invoiceError) {
     throw invoiceError;
   }
+
+  invoice.dbId = insertedInvoice.id;
 
   await Promise.all([
     cloudClient.from("products").update({ stock: product.stock }).eq("id", product.id),
@@ -1031,16 +1033,36 @@ async function sendInvoiceToDian(invoiceId) {
     return;
   }
 
-  invoice.dianStatus = "Validada";
-  invoice.cufe = invoice.cufe || generateMockCufe(invoice);
-  invoice.xmlUrl = invoice.xmlUrl || `https://docs.quantroxsystems.cloud/xml/${encodeURIComponent(invoice.id)}.xml`;
-  invoice.qrUrl = invoice.qrUrl || `https://docs.quantroxsystems.cloud/qr/${encodeURIComponent(invoice.id)}.png`;
-  invoice.dianResponse = `Validacion simulada con ${data.dian.provider}`;
+  let response = null;
+  if (canSyncCloud() && cloudClient.functions?.invoke) {
+    try {
+      const result = await cloudClient.functions.invoke("send-invoice-to-dian", {
+        body: {
+          company: data.company,
+          dian: data.dian,
+          invoice
+        }
+      });
+      if (result.error) {
+        throw result.error;
+      }
+      response = result.data;
+    } catch (error) {
+      cloudError = error.message || "No se pudo llamar la funcion DIAN.";
+      data.cloud.syncStatus = "DIAN en mock local por funcion pendiente";
+    }
+  }
+
+  invoice.dianStatus = response?.dianStatus || "Validada";
+  invoice.cufe = response?.cufe || invoice.cufe || generateMockCufe(invoice);
+  invoice.xmlUrl = response?.xmlUrl || invoice.xmlUrl || `https://docs.quantroxsystems.cloud/xml/${encodeURIComponent(invoice.id)}.xml`;
+  invoice.qrUrl = response?.qrUrl || invoice.qrUrl || `https://docs.quantroxsystems.cloud/qr/${encodeURIComponent(invoice.id)}.png`;
+  invoice.dianResponse = response?.message || `Validacion simulada con ${data.dian.provider}`;
   data.dian.lastResponse = `${invoice.id} validada en modo ${data.dian.environment}`;
   data.dianEvents.unshift({
     date: new Date().toISOString().slice(0, 10),
     invoice: invoice.id,
-    event: "Envio a DIAN",
+    event: response?.mode === "real" ? "Envio real a proveedor" : "Envio a DIAN",
     status: invoice.dianStatus,
     response: invoice.dianResponse
   });
@@ -2331,7 +2353,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=17").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=18").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });

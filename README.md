@@ -17,6 +17,7 @@ Aplicacion PWA para operar una suite empresarial desde navegador o como app inst
 - Acciones comerciales por factura: PDF imprimible, WhatsApp, link de pago y marcar como pagada
 - Kardex valorizado para inventario
 - Modulo DIAN preparado para proveedor tecnologico, CUFE, XML, QR y trazabilidad
+- Supabase Edge Function `send-invoice-to-dian` para conectar proveedor DIAN sin exponer tokens en el navegador
 - Configuracion multiempresa
 - Panel de activacion Supabase con estado de sesion, empresa vinculada y pendientes
 

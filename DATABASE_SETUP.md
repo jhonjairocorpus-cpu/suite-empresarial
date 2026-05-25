@@ -109,6 +109,50 @@ Con Supabase activo, la app ya:
 1. Crear vistas/reportes SQL para tablero gerencial.
 2. Agregar `customer_id` real en facturas desde el selector de clientes.
 3. Sincronizar POS, nomina y portal de clientes.
-4. Crear Edge Functions para DIAN, pagos y WhatsApp Business API.
+4. Crear Edge Functions para pagos y WhatsApp Business API.
 5. Elegir proveedor tecnologico DIAN y conectar token/API real para reemplazar el mock tecnico.
 6. Mantener `localStorage` como cache offline.
+
+## Edge Function DIAN
+
+La funcion `supabase/functions/send-invoice-to-dian` es el backend seguro entre la app y el proveedor DIAN.
+
+Flujo:
+
+```text
+App -> Supabase Edge Function -> Proveedor DIAN -> Supabase -> App
+```
+
+Despliegue:
+
+```powershell
+supabase login
+supabase link --project-ref msfprxivjibbpgditbhg
+supabase functions deploy send-invoice-to-dian
+```
+
+Variables minimas para modo mock:
+
+```powershell
+supabase secrets set DIAN_PROVIDER_MODE=mock
+```
+
+Variables para proveedor Factus en sandbox:
+
+```powershell
+supabase secrets set DIAN_PROVIDER_MODE=factus
+supabase secrets set FACTUS_API_URL=https://api-sandbox.factus.com.co
+supabase secrets set FACTUS_ACCESS_TOKEN=TOKEN_DEL_PROVEEDOR
+supabase secrets set FACTUS_NUMBERING_RANGE_ID=ID_RANGO_NUMERACION
+```
+
+Variables opcionales segun proveedor:
+
+```powershell
+supabase secrets set FACTUS_PAYMENT_METHOD_CODE=10
+supabase secrets set FACTUS_DEFAULT_PHONE=3000000000
+supabase secrets set FACTUS_MUNICIPALITY_ID=149
+supabase secrets set FACTUS_UNIT_MEASURE_ID=70
+```
+
+Nunca guardar tokens DIAN o `service_role` dentro de `cloud-config.js` ni en el navegador.
