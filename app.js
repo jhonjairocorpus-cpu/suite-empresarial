@@ -1,4 +1,4 @@
-const STORAGE_KEY = "quantrox-suite-data-v7";
+const STORAGE_KEY = "quantrox-suite-data-v8";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -13,7 +13,10 @@ const defaultData = {
     plan: "Suite Integral",
     user: "Administrador",
     city: "Bogota",
-    email: "admin@empresa.com"
+    email: "admin@empresa.com",
+    commercialName: "Comercial Andina",
+    industry: "Retail y servicios",
+    accent: "#0f766e"
   },
   cloud: {
     mode: "Demo local",
@@ -84,6 +87,12 @@ const defaultData = {
     { title: "Compra sugerida", area: "Inventario", impact: "Evita quiebres de stock", enabled: true },
     { title: "Cierre diario", area: "POS", impact: "Reduce errores de caja", enabled: false }
   ],
+  automations: [
+    { title: "Enviar WhatsApp al facturar", trigger: "Factura creada", action: "Mensaje con total y enlace de pago", status: "Activo" },
+    { title: "Crear tarea por stock bajo", trigger: "Stock <= minimo", action: "Tarea de compra sugerida", status: "Activo" },
+    { title: "Recordatorio de cartera", trigger: "Factura pendiente", action: "Mensaje al cliente", status: "Listo" },
+    { title: "Sincronizar e-commerce", trigger: "Venta online", action: "Factura + salida inventario", status: "Planeado" }
+  ],
   advantages: [
     { title: "Asistente operativo", category: "IA", value: "Recomendaciones accionables por cartera, stock, margen y nomina.", status: "Activo" },
     { title: "Portal de cliente", category: "Experiencia", value: "Facturas, pagos, historial y soporte desde un enlace compartible.", status: "Disenado" },
@@ -115,6 +124,8 @@ const moduleMeta = {
   reports: { title: "Reportes", eyebrow: "Indicadores" },
   assistant: { title: "Asistente empresarial", eyebrow: "Acciones inteligentes" },
   growth: { title: "Ventajas Quantrox", eyebrow: "Diferenciadores" },
+  portal: { title: "Portal de clientes", eyebrow: "Experiencia externa" },
+  automations: { title: "Automatizaciones", eyebrow: "Flujos conectados" },
   settings: { title: "Configuracion", eyebrow: "Empresa y sistema" }
 };
 
@@ -129,6 +140,8 @@ const navItems = [
   ["reports", "Reportes", "B"],
   ["assistant", "Asistente", "A"],
   ["growth", "Ventajas", "Q"],
+  ["portal", "Portal", "L"],
+  ["automations", "Auto", "Z"],
   ["settings", "Ajustes", "S"]
 ];
 
@@ -138,6 +151,11 @@ let authenticated = localStorage.getItem("quantrox-suite-auth") === "true";
 let deferredInstallPrompt = null;
 
 const app = document.querySelector("#app");
+
+function applyBrandTheme() {
+  document.documentElement.style.setProperty("--accent", data.company.accent || "#0f766e");
+  document.documentElement.style.setProperty("--accent-2", data.company.accent || "#18a999");
+}
 
 function loadData() {
   try {
@@ -235,6 +253,8 @@ function metric(label, value, detail, tone = "") {
 }
 
 function render() {
+  applyBrandTheme();
+
   if (!authenticated) {
     renderLogin();
     return;
@@ -338,6 +358,8 @@ function renderActiveModule() {
     reports: renderReports,
     assistant: renderAssistant,
     growth: renderGrowth,
+    portal: renderPortal,
+    automations: renderAutomations,
     settings: renderSettings
   };
 
@@ -803,6 +825,110 @@ function renderGrowth() {
   `;
 }
 
+function renderPortal() {
+  const pendingInvoices = data.invoices.filter((item) => item.status !== "Pagada");
+  const paidInvoices = data.invoices.filter((item) => item.status === "Pagada");
+  const portalUrl = `https://clientes.quantroxsystems.cloud/${encodeURIComponent(data.company.nit.replaceAll(".", "").replaceAll("-", ""))}`;
+
+  return `
+    <section class="hero-panel portal-hero">
+      <div>
+        <p class="eyebrow">Portal compartible</p>
+        <h2 class="balanced-title">Un espacio para que tus clientes consulten, paguen y pidan soporte.</h2>
+        <p>Este portal prepara la experiencia externa: facturas, pagos, historial, soporte WhatsApp y estado de cuenta desde un enlace unico por empresa.</p>
+        <div class="hero-actions">
+          <a class="primary-button" href="https://wa.me/573218247072?text=Hola,%20quiero%20activar%20el%20portal%20de%20clientes%20Quantrox" target="_blank" rel="noopener">Activar portal</a>
+          <button class="secondary-button" type="button" data-nav="invoices">Ver facturas</button>
+        </div>
+      </div>
+      <div class="portal-preview">
+        <span>${escapeHtml(data.company.commercialName || data.company.name)}</span>
+        <strong>Estado de cuenta</strong>
+        <small>${escapeHtml(portalUrl)}</small>
+        <div class="portal-line"><span>Pendiente</span><b>${formatMoney(pendingInvoices.reduce((sum, item) => sum + item.subtotal + item.tax, 0))}</b></div>
+        <div class="portal-line"><span>Pagado</span><b>${formatMoney(paidInvoices.reduce((sum, item) => sum + item.subtotal + item.tax, 0))}</b></div>
+      </div>
+    </section>
+
+    <section class="summary-grid">
+      ${metric("Clientes", data.customers.length, "Con acceso potencial")}
+      ${metric("Facturas pendientes", pendingInvoices.length, "Para cobro digital", pendingInvoices.length ? "attention" : "")}
+      ${metric("Link de pago", "Listo", "Integracion preparada")}
+      ${metric("Soporte", "WhatsApp", "Canal conectado")}
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel">
+        <h3>Experiencia del cliente <span class="panel-label">Portal</span></h3>
+        <div class="value-ladder">
+          <span><b>Consultar</b><small>Facturas, pagos e historial comercial.</small></span>
+          <span><b>Pagar</b><small>Link de pago cuando conectemos pasarela.</small></span>
+          <span><b>Soporte</b><small>WhatsApp directo con contexto de factura.</small></span>
+          <span><b>Recomprar</b><small>Pedidos recurrentes conectados al inventario.</small></span>
+        </div>
+      </article>
+      ${renderMiniTable("Facturas visibles en portal", ["Numero", "Cliente", "Estado", "Total"], data.invoices.map((item) => [
+        item.id,
+        item.customer,
+        badge(item.status, item.status === "Pagada" ? "good" : "warn"),
+        formatMoney(item.subtotal + item.tax)
+      ]))}
+    </section>
+  `;
+}
+
+function renderAutomations() {
+  const activeAutomations = data.automations.filter((item) => item.status === "Activo").length;
+
+  return `
+    <section class="hero-panel app-hero">
+      <div>
+        <p class="eyebrow">Centro de automatizacion</p>
+        <h2 class="balanced-title">Menos digitacion, mas operacion conectada.</h2>
+        <p>Quantrox puede ejecutar tareas al crear facturas, bajar stock, detectar cartera, vender online o cerrar caja.</p>
+        <div class="hero-actions">
+          <button class="primary-button" type="button" data-run-automation>Simular automatizaciones</button>
+          <button class="secondary-button" type="button" data-nav="portal">Abrir portal</button>
+        </div>
+      </div>
+      <div class="command-center">
+        <span>Automatizaciones activas</span>
+        <strong>${activeAutomations}/${data.automations.length}</strong>
+        <div class="progress-track"><i style="width:${Math.round((activeAutomations / data.automations.length) * 100)}%"></i></div>
+        <small>WhatsApp, pagos, e-commerce y DIAN</small>
+      </div>
+    </section>
+
+    <section class="assistant-grid">
+      ${data.automations.map((item) => `
+        <article class="assistant-card ${item.status === "Activo" ? "good" : ""}">
+          <span class="panel-label">${escapeHtml(item.trigger)}</span>
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.action)}</p>
+          ${badge(item.status, item.status === "Activo" ? "good" : item.status === "Listo" ? "info" : "warn")}
+        </article>
+      `).join("")}
+    </section>
+
+    <section class="dashboard-grid">
+      ${renderMiniTable("Integraciones clave", ["Canal", "Uso", "Estado"], data.integrations.map((item) => [
+        item.name,
+        item.use,
+        badge(item.status, item.status === "Activo" ? "good" : "info")
+      ]))}
+      <article class="panel">
+        <h3>Desarrollo a medida <span class="panel-label">Quantrox Lab</span></h3>
+        <div class="timeline">
+          <span><b>Diagnostico</b><small>Mapeamos el flujo real del cliente.</small></span>
+          <span><b>Modulo propio</b><small>Campos, reglas, reportes y roles a medida.</small></span>
+          <span><b>Integracion</b><small>Pagos, WhatsApp, tienda online, bancos o ERP externo.</small></span>
+          <span><b>Soporte</b><small>Mejora continua por version del cliente.</small></span>
+        </div>
+      </article>
+    </section>
+  `;
+}
+
 function renderMiniTable(title, headers, rows) {
   return `
     <article class="panel table-panel">
@@ -831,6 +957,16 @@ function renderSettings() {
           <label>NIT <input name="nit" value="${escapeHtml(data.company.nit)}" required></label>
           <label>Ciudad <input name="city" value="${escapeHtml(data.company.city)}" required></label>
           <label>Correo <input name="email" value="${escapeHtml(data.company.email)}" required type="email"></label>
+          <label>Nombre comercial <input name="commercialName" value="${escapeHtml(data.company.commercialName || data.company.name)}" required></label>
+          <label>Sector <input name="industry" value="${escapeHtml(data.company.industry || "Servicios")}" required></label>
+          <label>Color de marca
+            <select name="accent">
+              <option value="#0f766e" ${data.company.accent === "#0f766e" ? "selected" : ""}>Verde Quantrox</option>
+              <option value="#2563eb" ${data.company.accent === "#2563eb" ? "selected" : ""}>Azul confianza</option>
+              <option value="#7c3aed" ${data.company.accent === "#7c3aed" ? "selected" : ""}>Violeta tecnologia</option>
+              <option value="#c2410c" ${data.company.accent === "#c2410c" ? "selected" : ""}>Naranja comercio</option>
+            </select>
+          </label>
           <button class="primary-button span-2" type="submit">Actualizar empresa</button>
         </form>
       </article>
@@ -1012,6 +1148,9 @@ function bindModuleEvents() {
       data.company.nit = String(form.get("nit")).trim();
       data.company.city = String(form.get("city")).trim();
       data.company.email = String(form.get("email")).trim();
+      data.company.commercialName = String(form.get("commercialName")).trim();
+      data.company.industry = String(form.get("industry")).trim();
+      data.company.accent = String(form.get("accent"));
     },
     userForm(event) {
       const form = new FormData(event.currentTarget);
@@ -1087,6 +1226,20 @@ function bindModuleEvents() {
       render();
     });
   }
+
+  const runAutomation = document.querySelector("[data-run-automation]");
+  if (runAutomation) {
+    runAutomation.addEventListener("click", () => {
+      data.tasks.unshift(
+        { text: "Enviar resumen automatico por WhatsApp", done: false },
+        { text: "Revisar integracion de pagos para portal cliente", done: false },
+        { text: "Preparar sincronizacion e-commerce con inventario", done: false }
+      );
+      saveData();
+      activeModule = "home";
+      render();
+    });
+  }
 }
 
 function bindInstallButton() {
@@ -1130,7 +1283,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=8").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=9").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });
