@@ -343,6 +343,7 @@ async function loadCloudData() {
     employeesResult,
     tasksResult,
     movementsResult,
+    dianEventsResult,
     activityResult
   ] = await Promise.all([
     cloudClient.from("companies").select("*").eq("id", companyId).single(),
@@ -353,6 +354,7 @@ async function loadCloudData() {
     cloudClient.from("employees").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("tasks").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("inventory_movements").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("dian_events").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(80),
     cloudClient.from("activity_logs").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(80)
   ]);
 
@@ -378,99 +380,92 @@ async function loadCloudData() {
     status: profile.status
   }];
 
-  if (customersResult.data?.length) {
-    data.customers = customersResult.data.map((item) => ({
-      id: item.id,
-      name: item.name,
-      channel: item.channel,
-      balance: Number(item.balance || 0),
-      contact: item.contact_email || ""
-    }));
-  }
+  data.customers = (customersResult.data || []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    channel: item.channel,
+    balance: Number(item.balance || 0),
+    contact: item.contact_email || ""
+  }));
 
-  if (productsResult.data?.length) {
-    data.inventory = productsResult.data.map((item) => ({
-      id: item.id,
-      sku: item.sku,
-      name: item.name,
-      stock: Number(item.stock || 0),
-      min: Number(item.min_stock || 0),
-      cost: Number(item.cost || 0),
-      price: Number(item.price || 0)
-    }));
-  }
+  data.inventory = (productsResult.data || []).map((item) => ({
+    id: item.id,
+    sku: item.sku,
+    name: item.name,
+    stock: Number(item.stock || 0),
+    min: Number(item.min_stock || 0),
+    cost: Number(item.cost || 0),
+    price: Number(item.price || 0)
+  }));
 
-  if (invoicesResult.data?.length) {
-    data.invoices = invoicesResult.data.map((item) => ({
-      dbId: item.id,
-      id: item.number,
-      customer: "Cliente registrado",
-      product: "Venta sincronizada",
-      quantity: 1,
-      status: item.status,
-      dianStatus: item.dian_status || "Por enviar",
-      paymentLink: item.payment_link || "",
-      cufe: item.cufe || "",
-      xmlUrl: item.xml_url || "",
-      qrUrl: item.qr_url || "",
-      dianResponse: item.dian_response || "",
-      date: item.issued_at,
-      subtotal: Number(item.subtotal || 0),
-      tax: Number(item.tax || 0)
-    }));
-  }
+  data.invoices = (invoicesResult.data || []).map((item) => ({
+    dbId: item.id,
+    id: item.number,
+    customer: "Cliente registrado",
+    product: "Venta sincronizada",
+    quantity: 1,
+    status: item.status,
+    dianStatus: item.dian_status || "Por enviar",
+    paymentLink: item.payment_link || "",
+    cufe: item.cufe || "",
+    xmlUrl: item.xml_url || "",
+    qrUrl: item.qr_url || "",
+    dianResponse: item.dian_response || "",
+    date: item.issued_at,
+    subtotal: Number(item.subtotal || 0),
+    tax: Number(item.tax || 0)
+  }));
 
-  if (accountingResult.data?.length) {
-    data.accounting = accountingResult.data.map((item) => ({
-      id: item.id,
-      detail: item.detail,
-      account: item.account,
-      category: item.category || item.account,
-      type: item.type,
-      amount: Number(item.amount || 0),
-      date: item.entry_date || item.created_at?.slice(0, 10) || getToday()
-    }));
-  }
+  data.accounting = (accountingResult.data || []).map((item) => ({
+    id: item.id,
+    detail: item.detail,
+    account: item.account,
+    category: item.category || item.account,
+    type: item.type,
+    amount: Number(item.amount || 0),
+    date: item.entry_date || item.created_at?.slice(0, 10) || getToday()
+  }));
 
-  if (employeesResult.data?.length) {
-    data.payroll = employeesResult.data.map((item) => ({
-      id: item.id,
-      name: item.full_name,
-      role: item.role,
-      salary: Number(item.salary || 0),
-      status: item.status
-    }));
-  }
+  data.payroll = (employeesResult.data || []).map((item) => ({
+    id: item.id,
+    name: item.full_name,
+    role: item.role,
+    salary: Number(item.salary || 0),
+    status: item.status
+  }));
 
-  if (tasksResult.data?.length) {
-    data.tasks = tasksResult.data.map((item) => ({
-      id: item.id,
-      text: item.text,
-      done: item.done
-    }));
-  }
+  data.tasks = (tasksResult.data || []).map((item) => ({
+    id: item.id,
+    text: item.text,
+    done: item.done
+  }));
 
-  if (movementsResult.data?.length) {
-    data.inventoryMovements = movementsResult.data.map((item) => ({
-      id: item.id,
-      date: item.movement_date,
-      type: item.type,
-      product: item.product_id ? "Producto registrado" : "Movimiento",
-      quantity: Number(item.quantity || 0),
-      origin: item.origin
-    }));
-  }
+  data.inventoryMovements = (movementsResult.data || []).map((item) => ({
+    id: item.id,
+    date: item.movement_date,
+    type: item.type,
+    product: item.product_id ? "Producto registrado" : "Movimiento",
+    quantity: Number(item.quantity || 0),
+    origin: item.origin
+  }));
 
-  if (activityResult.data?.length) {
-    data.activityLogs = activityResult.data.map((item) => ({
-      id: item.id,
-      date: item.created_at,
-      user: item.user_email || "Usuario cloud",
-      area: item.area,
-      action: item.action,
-      detail: item.detail
-    }));
-  }
+  data.dianEvents = (dianEventsResult?.data || []).map((item) => ({
+    id: item.id,
+    date: item.created_at?.slice(0, 10) || getToday(),
+    invoice: item.invoice_number,
+    event: item.event,
+    status: item.status,
+    response: item.response || ""
+  }));
+
+  data.activityLogs = (activityResult.data || []).map((item) => ({
+    id: item.id,
+    date: item.created_at,
+    user: item.user_email || "Usuario cloud",
+    area: item.area,
+    action: item.action,
+    detail: item.detail
+  }));
 
   data.cloud.mode = "Cloud conectado";
   data.cloud.syncStatus = "Datos sincronizados";
@@ -729,6 +724,76 @@ async function updateCloudInvoiceDian(invoice) {
   }
 
   markCloudSynced(`DIAN ${invoice.id}`);
+}
+
+function canManageCompanyData() {
+  const role = data.users?.[0]?.role || "";
+  return ["Propietario", "Administrador"].includes(role);
+}
+
+async function clearCompanyOperationalData() {
+  if (!canSyncCloud()) {
+    throw new Error("Debes iniciar sesion en cloud para limpiar datos de empresa.");
+  }
+
+  if (!canManageCompanyData()) {
+    throw new Error("Solo Propietario o Administrador puede limpiar datos.");
+  }
+
+  const companyId = data.company.id;
+  const tables = [
+    "activity_logs",
+    "dian_events",
+    "inventory_movements",
+    "invoice_items",
+    "invoices",
+    "accounting_entries",
+    "tasks",
+    "employees",
+    "customers",
+    "products"
+  ];
+
+  for (const table of tables) {
+    if (table === "invoice_items") {
+      const { data: invoices, error: invoiceLookupError } = await cloudClient
+        .from("invoices")
+        .select("id")
+        .eq("company_id", companyId);
+
+      if (invoiceLookupError) {
+        throw invoiceLookupError;
+      }
+
+      const invoiceIds = (invoices || []).map((item) => item.id);
+      if (invoiceIds.length) {
+        const { error } = await cloudClient.from("invoice_items").delete().in("invoice_id", invoiceIds);
+        if (error) {
+          throw error;
+        }
+      }
+      continue;
+    }
+
+    const { error } = await cloudClient.from(table).delete().eq("company_id", companyId);
+    if (error) {
+      throw error;
+    }
+  }
+
+  data.customers = [];
+  data.inventory = [];
+  data.invoices = [];
+  data.accounting = [];
+  data.payroll = [];
+  data.tasks = [];
+  data.inventoryMovements = [];
+  data.dianEvents = [];
+  data.activityLogs = [];
+  await recordActivity("Ajustes", "Datos operativos eliminados", "Administrador limpio la empresa para iniciar operacion real");
+  data.cloud.syncStatus = "Empresa limpia para operar";
+  data.cloud.lastSync = "Limpieza de empresa";
+  data.cloud.lastBackup = new Date().toLocaleString("es-CO");
 }
 
 function applyBrandTheme() {
@@ -2222,6 +2287,7 @@ function renderMiniTable(title, headers, rows) {
 
 function renderSettings() {
   const cloudConfigured = isCloudConfigured();
+  const manager = canManageCompanyData();
   const cloudSteps = [
     { label: "Credenciales", value: cloudConfigured ? "Listas" : "Pendientes", tone: cloudConfigured ? "good" : "warn" },
     { label: "Sesion", value: cloudSession ? "Activa" : "Local", tone: cloudSession ? "good" : "info" },
@@ -2283,6 +2349,18 @@ function renderSettings() {
         <button class="quick-button" type="button" data-add-task="Configurar cloud-config.js con URL y anon key de Supabase">Crear tarea cloud</button>
       </div>
     </section>
+    ${manager ? `
+      <section class="panel danger-zone">
+        <div>
+          <h3>Limpieza de empresa <span class="panel-label">Administrador</span></h3>
+          <p>Elimina productos, clientes, facturas, movimientos, contabilidad, nomina, tareas e historial operativo de esta empresa. No elimina la empresa ni el usuario.</p>
+        </div>
+        <form class="form-grid" id="clearCompanyForm">
+          <label>Confirmacion <input name="confirm" required placeholder="Escribe LIMPIAR"></label>
+          <button class="secondary-button danger" type="submit">Eliminar datos operativos</button>
+        </form>
+      </section>
+    ` : ""}
     <section class="dashboard-grid">
       <article class="panel">
         <h3>Usuarios y roles <span class="panel-label">Accesos</span></h3>
@@ -2516,6 +2594,15 @@ function bindModuleEvents() {
         status: "Invitado"
       });
       await recordActivity("Ajustes", "Usuario preparado", String(form.get("email")).trim());
+    },
+    async clearCompanyForm(event) {
+      const form = new FormData(event.currentTarget);
+      if (String(form.get("confirm")).trim().toUpperCase() !== "LIMPIAR") {
+        cloudError = "Para eliminar los datos operativos debes escribir LIMPIAR.";
+        return;
+      }
+
+      await clearCompanyOperationalData();
     }
   };
 

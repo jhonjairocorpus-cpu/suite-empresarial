@@ -320,6 +320,26 @@ h3 {
   color: var(--danger);
 }
 
+.secondary-button.danger {
+  color: var(--danger);
+  border-color: rgba(220, 38, 38, 0.35);
+  background: #fff;
+}
+
+.danger-zone {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 0.78fr);
+  align-items: end;
+  gap: 18px;
+  margin-bottom: 18px;
+  border-color: rgba(220, 38, 38, 0.24);
+  background: #fffafa;
+}
+
+.danger-zone p {
+  margin: 0;
+}
+
 .row-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1078,6 +1098,7 @@ select:focus {
   .dashboard-grid.wide-left,
   .hero-panel,
   .comparison-controls,
+  .danger-zone,
   .login-screen,
   .assistant-grid,
   .accounting-kpis,
