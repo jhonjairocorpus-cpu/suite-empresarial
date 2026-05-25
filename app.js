@@ -684,7 +684,7 @@ function renderQuickBot() {
 
   return `
     <section class="quick-bot ${bot.open ? "open" : ""}" aria-label="Bot de respuestas rapidas">
-      <button class="bot-fab" type="button" data-bot-toggle aria-label="Abrir bot de respuestas rapidas">?</button>
+      <button class="bot-fab" type="button" data-bot-toggle aria-label="Abrir bot de respuestas rapidas">🤖</button>
       <div class="bot-panel">
         <header class="bot-header">
           <div>
@@ -1698,7 +1698,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=11").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=12").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });
