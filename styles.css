@@ -467,9 +467,24 @@ h3 {
 
 .accounting-kpis,
 .comparison-bars,
-.compare-row {
+.compare-row,
+.comparison-controls {
   display: grid;
   gap: 12px;
+}
+
+.comparison-controls {
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px) minmax(180px, 240px);
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.comparison-controls h3 {
+  margin-bottom: 4px;
+}
+
+.comparison-controls p {
+  margin: 0;
 }
 
 .accounting-kpis {
@@ -1062,6 +1077,7 @@ select:focus {
   .dashboard-grid,
   .dashboard-grid.wide-left,
   .hero-panel,
+  .comparison-controls,
   .login-screen,
   .assistant-grid,
   .accounting-kpis,

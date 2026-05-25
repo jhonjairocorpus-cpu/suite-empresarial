@@ -82,6 +82,10 @@ const defaultData = {
     { detail: "Nomina mes anterior", account: "Gasto laboral", category: "Nomina", type: "Gasto", amount: 1760000, date: "2026-04-20" },
     { detail: "Arriendo y servicios", account: "Administracion", category: "Administracion", type: "Gasto", amount: 520000, date: "2026-05-16" }
   ],
+  accountingCompare: {
+    primary: "",
+    secondary: ""
+  },
   payroll: [
     { name: "Ana Martinez", role: "Administracion", salary: 2100000, status: "Activa" },
     { name: "Carlos Ruiz", role: "Ventas", salary: 1900000, status: "Activa" },
@@ -794,6 +798,20 @@ function getAccountingPeriods() {
   return { current, previous, months: sorted };
 }
 
+function getAccountingMonthOptions(selectedMonth) {
+  const periods = getAccountingPeriods();
+  const months = new Set(periods.months);
+  months.add(periods.current);
+  months.add(periods.previous);
+  if (selectedMonth) {
+    months.add(selectedMonth);
+  }
+
+  return [...months].sort().reverse().map((month) => `
+    <option value="${escapeHtml(month)}" ${month === selectedMonth ? "selected" : ""}>${escapeHtml(getMonthLabel(month))}</option>
+  `).join("");
+}
+
 function summarizeAccounting(monthKey) {
   const entries = data.accounting.filter((entry, index) => getMonthKey(getEntryDate(entry, index)) === monthKey);
   const income = entries.filter((entry) => entry.type === "Ingreso").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
@@ -820,15 +838,20 @@ function percentChange(current, previous) {
     return current ? 100 : 0;
   }
 
-  return Math.round(((current - previous) / previous) * 100);
+  return Math.round(((current - previous) / Math.abs(previous)) * 100);
 }
 
 function getAccountingComparison() {
   const periods = getAccountingPeriods();
-  const current = summarizeAccounting(periods.current);
-  const previous = summarizeAccounting(periods.previous);
+  const saved = data.accountingCompare || {};
+  const primaryMonth = periods.months.includes(saved.primary) ? saved.primary : periods.current;
+  const secondaryMonth = periods.months.includes(saved.secondary) && saved.secondary !== primaryMonth
+    ? saved.secondary
+    : periods.months.find((month) => month !== primaryMonth) || periods.previous;
+  const current = summarizeAccounting(primaryMonth);
+  const previous = summarizeAccounting(secondaryMonth);
   return {
-    periods,
+    periods: { ...periods, current: primaryMonth, previous: secondaryMonth },
     current,
     previous,
     changes: {
@@ -1642,7 +1665,23 @@ function renderAccounting() {
       ${metric("Ingresos", formatMoney(totals.income), "Movimientos positivos")}
       ${metric("Gastos", formatMoney(totals.expense), "Costos y egresos")}
       ${metric("Resultado", formatMoney(totals.balance), `${totals.margin}% margen`, totals.balance < 0 ? "attention" : "")}
-      ${metric("Periodo actual", getMonthLabel(comparison.current.monthKey), `${comparison.current.entries.length} movimientos`)}
+      ${metric("Mes principal", getMonthLabel(comparison.current.monthKey), `${comparison.current.entries.length} movimientos`)}
+    </section>
+    <section class="panel comparison-controls">
+      <div>
+        <h3>Comparar meses <span class="panel-label">Ventas vs gastos</span></h3>
+        <p>Elige dos meses y revisa ventas, gastos, utilidad, margen y categorias que mas pesan.</p>
+      </div>
+      <label>Mes principal
+        <select data-accounting-month="primary">
+          ${getAccountingMonthOptions(comparison.current.monthKey)}
+        </select>
+      </label>
+      <label>Comparar contra
+        <select data-accounting-month="secondary">
+          ${getAccountingMonthOptions(comparison.previous.monthKey)}
+        </select>
+      </label>
     </section>
     <section class="hero-panel accounting-hero">
       <div>
@@ -1656,16 +1695,16 @@ function renderAccounting() {
         </div>
       </div>
       <div class="comparison-bars">
-        ${renderCompareBar("Ventas actual", comparison.current.income, maxCompare, "good")}
-        ${renderCompareBar("Ventas anterior", comparison.previous.income, maxCompare, "soft")}
-        ${renderCompareBar("Gastos actual", comparison.current.expense, maxCompare, "danger")}
-        ${renderCompareBar("Gastos anterior", comparison.previous.expense, maxCompare, "soft")}
+        ${renderCompareBar(`Ventas ${getMonthLabel(comparison.current.monthKey)}`, comparison.current.income, maxCompare, "good")}
+        ${renderCompareBar(`Ventas ${getMonthLabel(comparison.previous.monthKey)}`, comparison.previous.income, maxCompare, "soft")}
+        ${renderCompareBar(`Gastos ${getMonthLabel(comparison.current.monthKey)}`, comparison.current.expense, maxCompare, "danger")}
+        ${renderCompareBar(`Gastos ${getMonthLabel(comparison.previous.monthKey)}`, comparison.previous.expense, maxCompare, "soft")}
       </div>
     </section>
     <section class="summary-grid">
-      ${metric("Ventas del periodo", formatMoney(comparison.current.income), `${comparison.changes.income}% vs anterior`)}
-      ${metric("Gastos del periodo", formatMoney(comparison.current.expense), `${comparison.changes.expense}% vs anterior`, comparison.changes.expense > comparison.changes.income ? "attention" : "")}
-      ${metric("Utilidad", formatMoney(comparison.current.result), `${comparison.changes.result}% vs anterior`, resultTone)}
+      ${metric("Ventas del mes", formatMoney(comparison.current.income), `${comparison.changes.income}% vs ${getMonthLabel(comparison.previous.monthKey)}`)}
+      ${metric("Gastos del mes", formatMoney(comparison.current.expense), `${comparison.changes.expense}% vs ${getMonthLabel(comparison.previous.monthKey)}`, comparison.changes.expense > comparison.changes.income ? "attention" : "")}
+      ${metric("Utilidad", formatMoney(comparison.current.result), `${comparison.changes.result}% vs ${getMonthLabel(comparison.previous.monthKey)}`, resultTone)}
       ${metric("Mayor gasto", formatMoney(comparison.current.topExpense[1]), comparison.current.topExpense[0], comparison.current.topExpense[1] > comparison.current.income * 0.35 ? "attention" : "")}
     </section>
     <section class="dashboard-grid">
@@ -1705,7 +1744,7 @@ function renderAccounting() {
     </section>
     <section class="dashboard-grid wide-left">
       <article class="panel">
-        <h3>Gastos por categoria <span class="panel-label">Periodo actual</span></h3>
+        <h3>Gastos por categoria <span class="panel-label">${getMonthLabel(comparison.current.monthKey)}</span></h3>
         <div class="progress-stack">
           ${expenseCategories.length ? expenseCategories.map(([category, amount]) => `
             <div class="progress-item">
@@ -2420,6 +2459,17 @@ function bindModuleEvents() {
     checkbox.addEventListener("change", () => {
       data.tasks[Number(checkbox.dataset.task)].done = checkbox.checked;
       saveData();
+    });
+  });
+
+  document.querySelectorAll("[data-accounting-month]").forEach((select) => {
+    select.addEventListener("change", () => {
+      data.accountingCompare = {
+        ...(data.accountingCompare || {}),
+        [select.dataset.accountingMonth]: select.value
+      };
+      saveData();
+      render();
     });
   });
 
