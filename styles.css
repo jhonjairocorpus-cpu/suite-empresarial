@@ -364,7 +364,8 @@ h3 {
 .form-grid,
 .invoice-row,
 .inventory-form,
-.score-grid {
+.score-grid,
+.assistant-grid {
   display: grid;
   gap: 16px;
 }
@@ -617,6 +618,63 @@ select:focus {
   grid-template-columns: repeat(3, 1fr);
 }
 
+.assistant-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 18px;
+}
+
+.assistant-card,
+.playbook-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.assistant-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  min-height: 250px;
+  padding: 20px;
+}
+
+.assistant-card p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.assistant-card.warn {
+  border-color: rgba(180, 83, 9, 0.28);
+  background: #fffbeb;
+}
+
+.assistant-card.danger {
+  border-color: rgba(180, 35, 24, 0.24);
+  background: #fff8f7;
+}
+
+.playbook-list {
+  display: grid;
+  gap: 10px;
+}
+
+.playbook-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+}
+
+.playbook-item span {
+  display: grid;
+  gap: 4px;
+}
+
+.playbook-item small {
+  color: var(--muted);
+}
+
 .score-grid span {
   display: grid;
   min-height: 120px;
@@ -660,7 +718,8 @@ select:focus {
   .dashboard-grid,
   .dashboard-grid.wide-left,
   .hero-panel,
-  .login-screen {
+  .login-screen,
+  .assistant-grid {
     grid-template-columns: 1fr;
   }
 

@@ -9,6 +9,7 @@ Aplicacion PWA para operar una suite empresarial desde navegador o como app inst
 - Nomina
 - Clientes / CRM
 - Reportes gerenciales
+- Asistente empresarial con recomendaciones operativas
 - Configuracion multiempresa
 
 La app funciona como sitio web estatico y puede publicarse en GitHub Pages. Una vez publicada con HTTPS, los usuarios pueden instalarla en Android, iPhone, iPad, Windows y macOS.

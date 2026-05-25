@@ -1,4 +1,4 @@
-const STORAGE_KEY = "quantrox-suite-data-v4";
+const STORAGE_KEY = "quantrox-suite-data-v5";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -70,6 +70,15 @@ const defaultData = {
     { text: "Revisar cartera pendiente", done: false },
     { text: "Validar stock bajo", done: false },
     { text: "Enviar reporte semanal", done: true }
+  ],
+  assistant: {
+    focus: "Crecimiento rentable",
+    lastRun: "Analisis demo"
+  },
+  playbooks: [
+    { title: "Cobro inteligente", area: "Cartera", impact: "Mejora flujo de caja", enabled: true },
+    { title: "Compra sugerida", area: "Inventario", impact: "Evita quiebres de stock", enabled: true },
+    { title: "Cierre diario", area: "POS", impact: "Reduce errores de caja", enabled: false }
   ]
 };
 
@@ -82,6 +91,7 @@ const moduleMeta = {
   payroll: { title: "Nomina", eyebrow: "Equipo y provisiones" },
   customers: { title: "Clientes", eyebrow: "CRM comercial" },
   reports: { title: "Reportes", eyebrow: "Indicadores" },
+  assistant: { title: "Asistente empresarial", eyebrow: "Acciones inteligentes" },
   settings: { title: "Configuracion", eyebrow: "Empresa y sistema" }
 };
 
@@ -94,6 +104,7 @@ const navItems = [
   ["payroll", "Nomina", "N"],
   ["customers", "Clientes", "R"],
   ["reports", "Reportes", "B"],
+  ["assistant", "Asistente", "A"],
   ["settings", "Ajustes", "S"]
 ];
 
@@ -289,6 +300,7 @@ function renderActiveModule() {
     payroll: renderPayroll,
     customers: renderCustomers,
     reports: renderReports,
+    assistant: renderAssistant,
     settings: renderSettings
   };
 
@@ -560,6 +572,116 @@ function renderReports() {
   `;
 }
 
+function getAssistantInsights() {
+  const totals = getTotals();
+  const lowStock = data.inventory.filter((item) => item.stock <= item.min);
+  const pendingInvoices = data.invoices.filter((item) => item.status !== "Pagada");
+  const monthlyPayrollWeight = totals.income ? Math.round((totals.payrollFull / totals.income) * 100) : 0;
+  const insights = [
+    {
+      title: pendingInvoices.length ? "Priorizar cartera" : "Cartera controlada",
+      area: "Finanzas",
+      tone: pendingInvoices.length ? "warn" : "good",
+      detail: pendingInvoices.length
+        ? `Hay ${pendingInvoices.length} factura(s) pendiente(s) por ${formatMoney(totals.pending)}.`
+        : "No hay facturas pendientes en la demo.",
+      action: pendingInvoices.length ? "Enviar recordatorio de pago" : "Mantener seguimiento semanal"
+    },
+    {
+      title: lowStock.length ? "Reponer inventario" : "Inventario estable",
+      area: "Inventario",
+      tone: lowStock.length ? "warn" : "good",
+      detail: lowStock.length
+        ? `${lowStock.length} referencia(s) estan bajo el minimo definido.`
+        : "No hay productos por debajo del stock minimo.",
+      action: lowStock.length ? "Crear orden de compra sugerida" : "Actualizar costos y precios"
+    },
+    {
+      title: totals.margin >= 20 ? "Margen saludable" : "Revisar rentabilidad",
+      area: "Contabilidad",
+      tone: totals.margin >= 20 ? "good" : "danger",
+      detail: `El margen operativo estimado es ${totals.margin}%.`,
+      action: totals.margin >= 20 ? "Escalar ventas de productos rentables" : "Reducir gastos o ajustar precios"
+    },
+    {
+      title: monthlyPayrollWeight <= 65 ? "Nomina sostenible" : "Nomina pesada",
+      area: "Nomina",
+      tone: monthlyPayrollWeight <= 65 ? "good" : "warn",
+      detail: `La nomina total equivale al ${monthlyPayrollWeight}% de los ingresos registrados.`,
+      action: monthlyPayrollWeight <= 65 ? "Planear incentivos por venta" : "Revisar turnos, comisiones y carga laboral"
+    }
+  ];
+
+  return insights;
+}
+
+function renderAssistant() {
+  const totals = getTotals();
+  const insights = getAssistantInsights();
+  const score = Math.max(0, Math.min(100, 72 + (totals.margin > 20 ? 8 : -10) - (totals.stockAlerts * 4) - (totals.pending > 0 ? 6 : 0)));
+
+  return `
+    <section class="hero-panel app-hero">
+      <div>
+        <p class="eyebrow">Copiloto Quantrox</p>
+        <h2>Decisiones claras antes de que el problema crezca.</h2>
+        <p>El asistente convierte ventas, cartera, inventario, contabilidad y nomina en acciones listas para ejecutar.</p>
+        <div class="hero-actions">
+          <button class="primary-button" type="button" data-generate-plan>Generar plan de accion</button>
+          <button class="secondary-button" type="button" data-nav="reports">Ver reportes</button>
+        </div>
+      </div>
+      <div class="command-center">
+        <span>Salud operativa</span>
+        <strong>${score}/100</strong>
+        <div class="progress-track"><i style="width:${score}%"></i></div>
+        <small>${escapeHtml(data.assistant.focus)}</small>
+      </div>
+    </section>
+
+    <section class="summary-grid">
+      ${metric("Alertas activas", insights.filter((item) => item.tone !== "good").length, "Prioridad operativa")}
+      ${metric("Cartera", formatMoney(totals.pending), "Pendiente por cobrar", totals.pending ? "attention" : "")}
+      ${metric("Stock bajo", totals.stockAlerts, "Referencias criticas", totals.stockAlerts ? "attention" : "")}
+      ${metric("Margen", `${totals.margin}%`, "Resultado operativo")}
+    </section>
+
+    <section class="assistant-grid">
+      ${insights.map((item) => `
+        <article class="assistant-card ${item.tone}">
+          <span class="panel-label">${escapeHtml(item.area)}</span>
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.detail)}</p>
+          <button class="quick-button" type="button" data-add-task="${escapeHtml(item.action)}">${escapeHtml(item.action)}</button>
+        </article>
+      `).join("")}
+    </section>
+
+    <section class="dashboard-grid">
+      <article class="panel">
+        <h3>Playbooks automaticos <span class="panel-label">Automatizacion</span></h3>
+        <div class="playbook-list">
+          ${data.playbooks.map((item) => `
+            <div class="playbook-item">
+              <span><b>${escapeHtml(item.title)}</b><small>${escapeHtml(item.area)} - ${escapeHtml(item.impact)}</small></span>
+              ${badge(item.enabled ? "Activo" : "Listo", item.enabled ? "good" : "info")}
+            </div>
+          `).join("")}
+        </div>
+      </article>
+      <article class="panel">
+        <h3>Proxima evolucion <span class="panel-label">IA real</span></h3>
+        <ul class="insight-list">
+          <li><span>Motor actual</span><b>Reglas de negocio</b></li>
+          <li><span>Con base cloud</span><b>Analisis historico</b></li>
+          <li><span>Con IA</span><b>Prediccion y recomendaciones</b></li>
+          <li><span>Accion esperada</span><b>Tareas automaticas</b></li>
+        </ul>
+      </article>
+    </section>
+  `;
+}
+
 function renderSettings() {
   return `
     <section class="summary-grid">
@@ -770,6 +892,31 @@ function bindModuleEvents() {
       render();
     });
   }
+
+  document.querySelectorAll("[data-add-task]").forEach((button) => {
+    button.addEventListener("click", () => {
+      data.tasks.unshift({
+        text: button.dataset.addTask,
+        done: false
+      });
+      saveData();
+      activeModule = "home";
+      render();
+    });
+  });
+
+  const generatePlan = document.querySelector("[data-generate-plan]");
+  if (generatePlan) {
+    generatePlan.addEventListener("click", () => {
+      const newTasks = getAssistantInsights()
+        .filter((item) => item.tone !== "good")
+        .map((item) => ({ text: item.action, done: false }));
+      data.tasks = [...newTasks, ...data.tasks];
+      data.assistant.lastRun = new Date().toISOString();
+      saveData();
+      render();
+    });
+  }
 }
 
 function bindInstallButton() {
@@ -813,7 +960,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=5").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=6").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });
