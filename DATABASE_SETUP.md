@@ -9,7 +9,9 @@ Esta suite ya tiene una base preparada para Supabase/PostgreSQL. La app publicad
 3. Copiar y ejecutar `database/supabase-schema.sql`.
 4. Activar proveedores de autenticacion en `Authentication`.
 5. Crear el primer usuario administrador.
-6. Insertar una empresa y un perfil ligado al usuario.
+6. Copiar el `User UID` del usuario.
+7. Abrir `database/supabase-seed-demo.sql`, reemplazar `UUID_DEL_USUARIO_AUTH` por ese UID y ejecutar el archivo.
+8. Editar `cloud-config.js` con la URL y la `anon key`.
 
 ## Modelo
 
@@ -22,6 +24,8 @@ Esta suite ya tiene una base preparada para Supabase/PostgreSQL. La app publicad
 - `accounting_entries`: movimientos contables.
 - `employees`: nomina.
 - `tasks`: tareas operativas.
+- `warehouses`: bodegas preparadas.
+- `price_lists`: listas de precios preparadas.
 
 Todas las tablas operativas usan `company_id`. Las politicas RLS limitan cada usuario a los datos de su empresa.
 
@@ -69,9 +73,25 @@ values (
 
 Despues de eso se pueden insertar productos, clientes y empleados iniciales con el mismo `company_id`.
 
+Tambien puedes usar `database/supabase-seed-demo.sql` para crear la empresa, el perfil administrador, productos, clientes y tareas base en un solo paso.
+
+## Sincronizacion actual
+
+Con Supabase activo, la app ya:
+
+- Inicia sesion con `signInWithPassword`.
+- Carga empresa, usuario, clientes, productos, facturas, contabilidad, nomina, tareas y movimientos.
+- Sincroniza facturas nuevas con inventario y contabilidad.
+- Sincroniza productos nuevos.
+- Sincroniza clientes nuevos.
+- Sincroniza cambios de empresa.
+- Actualiza estado de pago de facturas que vienen desde cloud.
+- Muestra estado de configuracion, sesion, empresa vinculada y pendientes.
+
 ## Siguiente implementacion
 
 1. Crear vistas/reportes SQL para tablero gerencial.
 2. Agregar `customer_id` real en facturas desde el selector de clientes.
 3. Sincronizar POS, nomina y portal de clientes.
-4. Mantener `localStorage` como cache offline.
+4. Crear Edge Functions para DIAN, pagos y WhatsApp Business API.
+5. Mantener `localStorage` como cache offline.

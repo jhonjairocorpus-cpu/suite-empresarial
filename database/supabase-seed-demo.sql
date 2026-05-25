@@ -1,0 +1,60 @@
+-- Quantrox Suite Empresarial
+-- Datos iniciales para probar Supabase despues de ejecutar supabase-schema.sql.
+-- 1. Crear usuario en Supabase Authentication.
+-- 2. Reemplazar UUID_DEL_USUARIO_AUTH por el ID del usuario creado.
+-- 3. Ejecutar este archivo en SQL Editor.
+
+with new_company as (
+  insert into public.companies (name, nit, city, email, plan)
+  values ('Comercial Andina SAS', '901.235.884-1', 'Bogota', 'admin@empresa.com', 'Suite Integral')
+  on conflict (nit) do update set
+    name = excluded.name,
+    city = excluded.city,
+    email = excluded.email,
+    plan = excluded.plan
+  returning id
+),
+admin_profile as (
+  insert into public.profiles (id, company_id, full_name, role, status)
+  select 'UUID_DEL_USUARIO_AUTH'::uuid, id, 'Administrador', 'Propietario', 'Activo'
+  from new_company
+  on conflict (id) do update set
+    company_id = excluded.company_id,
+    full_name = excluded.full_name,
+    role = excluded.role,
+    status = excluded.status
+  returning company_id
+)
+insert into public.products (company_id, sku, name, stock, min_stock, cost, price)
+select company_id, item.sku, item.name, item.stock, item.min_stock, item.cost, item.price
+from admin_profile,
+jsonb_to_recordset('[
+  {"sku":"PRD-001","name":"Plancha industrial","stock":14,"min_stock":6,"cost":155000,"price":235000},
+  {"sku":"PRD-002","name":"Bascula digital","stock":5,"min_stock":8,"cost":98000,"price":155000},
+  {"sku":"PRD-003","name":"Impresora POS","stock":11,"min_stock":5,"cost":210000,"price":318000},
+  {"sku":"SRV-014","name":"Servicio tecnico","stock":999,"min_stock":1,"cost":65000,"price":180000}
+]'::jsonb) as item(sku text, name text, stock numeric, min_stock numeric, cost numeric, price numeric)
+on conflict (company_id, sku) do update set
+  name = excluded.name,
+  stock = excluded.stock,
+  min_stock = excluded.min_stock,
+  cost = excluded.cost,
+  price = excluded.price;
+
+insert into public.customers (company_id, name, channel, contact_email, balance)
+select c.id, item.name, item.channel, item.contact_email, item.balance
+from (select id from public.companies where nit = '901.235.884-1') c,
+jsonb_to_recordset('[
+  {"name":"Drogueria Central","channel":"Mayorista","contact_email":"compras@central.com","balance":0},
+  {"name":"Mercado La 80","channel":"Retail","contact_email":"admin@la80.com","balance":904400},
+  {"name":"Cafe Norte","channel":"Servicios","contact_email":"gerencia@cafenorte.com","balance":0}
+]'::jsonb) as item(name text, channel text, contact_email text, balance numeric);
+
+insert into public.tasks (company_id, text, done)
+select c.id, item.text, item.done
+from (select id from public.companies where nit = '901.235.884-1') c,
+jsonb_to_recordset('[
+  {"text":"Revisar cartera pendiente","done":false},
+  {"text":"Validar stock bajo","done":false},
+  {"text":"Enviar reporte semanal","done":true}
+]'::jsonb) as item(text text, done boolean);

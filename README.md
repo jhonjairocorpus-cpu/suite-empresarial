@@ -17,6 +17,7 @@ Aplicacion PWA para operar una suite empresarial desde navegador o como app inst
 - Acciones comerciales por factura: PDF imprimible, WhatsApp, link de pago y marcar como pagada
 - Kardex valorizado para inventario
 - Configuracion multiempresa
+- Panel de activacion Supabase con estado de sesion, empresa vinculada y pendientes
 
 La app funciona como sitio web estatico y puede publicarse en GitHub Pages. Una vez publicada con HTTPS, los usuarios pueden instalarla en Android, iPhone, iPad, Windows y macOS.
 
@@ -86,6 +87,7 @@ El prototipo guarda informacion en el dispositivo con `localStorage`. Para uso m
 ## Base de datos
 
 La estructura inicial de produccion esta en `database/supabase-schema.sql`.
+Los datos iniciales para probar cloud estan en `database/supabase-seed-demo.sql`.
 
 Ver el paso a paso en `DATABASE_SETUP.md`.
 

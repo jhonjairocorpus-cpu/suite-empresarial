@@ -22,7 +22,9 @@ const defaultData = {
     mode: "Demo local",
     database: "Supabase/PostgreSQL",
     syncStatus: "Pendiente de conexion",
-    lastBackup: "Sin respaldo cloud"
+    lastBackup: "Sin respaldo cloud",
+    pendingSync: 0,
+    lastSync: "Sin sincronizar"
   },
   users: [
     { name: "Administrador", email: "admin@empresa.com", role: "Propietario", status: "Activo" },
@@ -380,6 +382,8 @@ async function loadCloudData() {
   data.cloud.mode = "Cloud conectado";
   data.cloud.syncStatus = "Datos sincronizados";
   data.cloud.lastBackup = new Date().toLocaleString("es-CO");
+  data.cloud.lastSync = "Carga inicial";
+  data.cloud.pendingSync = 0;
   saveData();
 }
 
@@ -425,6 +429,125 @@ async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountin
 
   data.cloud.syncStatus = "Ultima factura sincronizada";
   data.cloud.lastBackup = new Date().toLocaleString("es-CO");
+  data.cloud.lastSync = `Factura ${invoice.id}`;
+}
+
+function canSyncCloud() {
+  return Boolean(cloudReady && cloudSession?.user && data.company.id);
+}
+
+function markCloudSynced(label) {
+  data.cloud.syncStatus = `${label} sincronizado`;
+  data.cloud.lastSync = label;
+  data.cloud.lastBackup = new Date().toLocaleString("es-CO");
+}
+
+function markCloudPending(label, error) {
+  data.cloud.pendingSync = Number(data.cloud.pendingSync || 0) + 1;
+  data.cloud.syncStatus = `${label} pendiente`;
+  cloudError = error?.message || cloudError;
+}
+
+async function syncCompanyToCloud() {
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  const { error } = await cloudClient.from("companies").update({
+    name: data.company.name,
+    nit: data.company.nit,
+    city: data.company.city,
+    email: data.company.email,
+    plan: data.company.plan
+  }).eq("id", data.company.id);
+
+  if (error) {
+    markCloudPending("Empresa", error);
+    return;
+  }
+
+  markCloudSynced("Empresa");
+}
+
+async function syncProductToCloud(product) {
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  const payload = {
+    company_id: data.company.id,
+    sku: product.sku,
+    name: product.name,
+    stock: product.stock,
+    min_stock: product.min,
+    cost: product.cost,
+    price: product.price
+  };
+  const { data: inserted, error } = await cloudClient.from("products").upsert(payload, { onConflict: "company_id,sku" }).select("id").single();
+
+  if (error) {
+    markCloudPending("Producto", error);
+    return;
+  }
+
+  product.id = inserted.id;
+  markCloudSynced("Producto");
+}
+
+async function syncCustomerToCloud(customer) {
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  const payload = {
+    company_id: data.company.id,
+    name: customer.name,
+    channel: customer.channel,
+    contact_email: customer.contact,
+    balance: customer.balance
+  };
+  const { error } = await cloudClient.from("customers").insert(payload);
+
+  if (error) {
+    markCloudPending("Cliente", error);
+    return;
+  }
+
+  markCloudSynced("Cliente");
+}
+
+async function syncTaskToCloud(task) {
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  const { error } = await cloudClient.from("tasks").insert({
+    company_id: data.company.id,
+    text: task.text,
+    done: task.done
+  });
+
+  if (error) {
+    markCloudPending("Tarea", error);
+    return;
+  }
+
+  markCloudSynced("Tarea");
+}
+
+async function updateCloudInvoiceStatus(invoice) {
+  if (!canSyncCloud() || !invoice.dbId) {
+    return;
+  }
+
+  const { error } = await cloudClient.from("invoices").update({ status: invoice.status }).eq("id", invoice.dbId);
+
+  if (error) {
+    markCloudPending("Pago", error);
+    return;
+  }
+
+  markCloudSynced(`Pago ${invoice.id}`);
 }
 
 function applyBrandTheme() {
@@ -865,7 +988,7 @@ function printInvoice(invoiceId) {
   printable.document.close();
 }
 
-function markInvoicePaid(invoiceId) {
+async function markInvoicePaid(invoiceId) {
   const invoice = data.invoices.find((item) => item.id === invoiceId);
   if (!invoice) {
     return;
@@ -873,6 +996,7 @@ function markInvoicePaid(invoiceId) {
 
   invoice.status = "Pagada";
   data.tasks.unshift({ text: `Conciliar pago de ${invoice.id}`, done: false });
+  await updateCloudInvoiceStatus(invoice);
   saveData();
   render();
 }
@@ -1475,6 +1599,14 @@ function renderMiniTable(title, headers, rows) {
 }
 
 function renderSettings() {
+  const cloudConfigured = isCloudConfigured();
+  const cloudSteps = [
+    { label: "Credenciales", value: cloudConfigured ? "Listas" : "Pendientes", tone: cloudConfigured ? "good" : "warn" },
+    { label: "Sesion", value: cloudSession ? "Activa" : "Demo", tone: cloudSession ? "good" : "info" },
+    { label: "Empresa cloud", value: data.company.id ? "Vinculada" : "Sin ID", tone: data.company.id ? "good" : "warn" },
+    { label: "Pendientes", value: Number(data.cloud.pendingSync || 0), tone: Number(data.cloud.pendingSync || 0) ? "warn" : "good" }
+  ];
+
   return `
     <section class="summary-grid">
       ${metric("Modo de datos", data.cloud.mode, "Operando en este dispositivo")}
@@ -1510,8 +1642,24 @@ function renderSettings() {
           <li><span>Backend recomendado</span><b>${escapeHtml(data.cloud.database)}</b></li>
           <li><span>Seguridad</span><b>RLS por empresa</b></li>
           <li><span>Modelo</span><b>Multiempresa por tenant</b></li>
+          <li><span>Ultima sync</span><b>${escapeHtml(data.cloud.lastSync || "Sin sincronizar")}</b></li>
         </ul>
       </article>
+    </section>
+    <section class="panel">
+      <h3>Activacion Supabase <span class="panel-label">Cloud real</span></h3>
+      <div class="cloud-checks">
+        ${cloudSteps.map((item) => `
+          <span>
+            <b>${escapeHtml(item.label)}</b>
+            ${badge(String(item.value), item.tone)}
+          </span>
+        `).join("")}
+      </div>
+      <div class="quick-actions">
+        <a class="quick-button" href="https://supabase.com/dashboard/projects" target="_blank" rel="noopener">Abrir Supabase</a>
+        <button class="quick-button" type="button" data-add-task="Configurar cloud-config.js con URL y anon key de Supabase">Crear tarea cloud</button>
+      </div>
     </section>
     <section class="dashboard-grid">
       <article class="panel">
@@ -1653,16 +1801,18 @@ function bindModuleEvents() {
         price: Number(form.get("price"))
       });
     },
-    inventoryForm(event) {
+    async inventoryForm(event) {
       const form = new FormData(event.currentTarget);
-      data.inventory.unshift({
+      const product = {
         sku: `PRD-${String(data.inventory.length + 1).padStart(3, "0")}`,
         name: String(form.get("name")).trim(),
         stock: Number(form.get("stock")),
         min: Number(form.get("min")),
         cost: Number(form.get("cost")),
         price: Number(form.get("price"))
-      });
+      };
+      data.inventory.unshift(product);
+      await syncProductToCloud(product);
     },
     accountingForm(event) {
       const form = new FormData(event.currentTarget);
@@ -1682,16 +1832,18 @@ function bindModuleEvents() {
         status: "Activa"
       });
     },
-    customerForm(event) {
+    async customerForm(event) {
       const form = new FormData(event.currentTarget);
-      data.customers.push({
+      const customer = {
         name: String(form.get("name")).trim(),
         channel: String(form.get("channel")).trim(),
         balance: 0,
         contact: String(form.get("contact")).trim()
-      });
+      };
+      data.customers.push(customer);
+      await syncCustomerToCloud(customer);
     },
-    settingsForm(event) {
+    async settingsForm(event) {
       const form = new FormData(event.currentTarget);
       data.company.name = String(form.get("name")).trim();
       data.company.nit = String(form.get("nit")).trim();
@@ -1700,6 +1852,7 @@ function bindModuleEvents() {
       data.company.commercialName = String(form.get("commercialName")).trim();
       data.company.industry = String(form.get("industry")).trim();
       data.company.accent = String(form.get("accent"));
+      await syncCompanyToCloud();
     },
     userForm(event) {
       const form = new FormData(event.currentTarget);
@@ -1867,7 +2020,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=13").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=14").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });

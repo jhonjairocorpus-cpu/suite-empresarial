@@ -307,6 +307,23 @@ h3 {
   gap: 6px;
 }
 
+.cloud-checks {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.cloud-checks span {
+  display: grid;
+  min-height: 82px;
+  align-content: space-between;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: #fff;
+}
+
 .mini-action {
   display: inline-flex;
   min-height: 30px;
@@ -1011,5 +1028,9 @@ select:focus {
 
   .bot-form {
     grid-template-columns: 1fr;
+  }
+
+  .cloud-checks {
+    grid-template-columns: 1fr 1fr;
   }
 }
