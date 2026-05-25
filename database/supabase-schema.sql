@@ -52,6 +52,10 @@ create table if not exists public.invoices (
   customer_id uuid references public.customers(id) on delete set null,
   number text not null,
   status text not null default 'Pendiente' check (status in ('Borrador', 'Pendiente', 'Pagada', 'Anulada')),
+  dian_status text not null default 'Por enviar',
+  cufe text,
+  qr_url text,
+  payment_link text,
   subtotal numeric(14,2) not null default 0,
   tax numeric(14,2) not null default 0,
   total numeric(14,2) generated always as (subtotal + tax) stored,
@@ -59,6 +63,11 @@ create table if not exists public.invoices (
   created_at timestamptz not null default now(),
   unique (company_id, number)
 );
+
+alter table public.invoices add column if not exists dian_status text not null default 'Por enviar';
+alter table public.invoices add column if not exists cufe text;
+alter table public.invoices add column if not exists qr_url text;
+alter table public.invoices add column if not exists payment_link text;
 
 create table if not exists public.invoice_items (
   id uuid primary key default gen_random_uuid(),
@@ -78,6 +87,24 @@ create table if not exists public.inventory_movements (
   quantity numeric(14,2) not null,
   origin text not null,
   movement_date date not null default current_date,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.warehouses (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  name text not null,
+  city text,
+  status text not null default 'Activa' check (status in ('Activa', 'Inactiva')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.price_lists (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  name text not null,
+  margin_percent numeric(8,2) not null default 0,
+  status text not null default 'Activa' check (status in ('Activa', 'Inactiva')),
   created_at timestamptz not null default now()
 );
 
@@ -115,6 +142,8 @@ create index if not exists idx_customers_company_id on public.customers(company_
 create index if not exists idx_products_company_id on public.products(company_id);
 create index if not exists idx_invoices_company_id on public.invoices(company_id);
 create index if not exists idx_inventory_movements_company_id on public.inventory_movements(company_id);
+create index if not exists idx_warehouses_company_id on public.warehouses(company_id);
+create index if not exists idx_price_lists_company_id on public.price_lists(company_id);
 create index if not exists idx_accounting_entries_company_id on public.accounting_entries(company_id);
 create index if not exists idx_employees_company_id on public.employees(company_id);
 create index if not exists idx_tasks_company_id on public.tasks(company_id);
@@ -126,6 +155,8 @@ alter table public.products enable row level security;
 alter table public.invoices enable row level security;
 alter table public.invoice_items enable row level security;
 alter table public.inventory_movements enable row level security;
+alter table public.warehouses enable row level security;
+alter table public.price_lists enable row level security;
 alter table public.accounting_entries enable row level security;
 alter table public.employees enable row level security;
 alter table public.tasks enable row level security;
@@ -187,6 +218,16 @@ with check (
 
 create policy "inventory_movements_company_access"
 on public.inventory_movements for all
+using (company_id = public.current_company_id())
+with check (company_id = public.current_company_id());
+
+create policy "warehouses_company_access"
+on public.warehouses for all
+using (company_id = public.current_company_id())
+with check (company_id = public.current_company_id());
+
+create policy "price_lists_company_access"
+on public.price_lists for all
 using (company_id = public.current_company_id())
 with check (company_id = public.current_company_id());
 

@@ -14,6 +14,8 @@ Aplicacion PWA para operar una suite empresarial desde navegador o como app inst
 - Ventajas Quantrox: automatizaciones, cumplimiento, portal cliente e integraciones
 - Portal de clientes, automatizaciones y personalizacion de marca
 - Bot de respuestas rapidas con escalamiento a WhatsApp
+- Acciones comerciales por factura: PDF imprimible, WhatsApp, link de pago y marcar como pagada
+- Kardex valorizado para inventario
 - Configuracion multiempresa
 
 La app funciona como sitio web estatico y puede publicarse en GitHub Pages. Una vez publicada con HTTPS, los usuarios pueden instalarla en Android, iPhone, iPad, Windows y macOS.
@@ -79,6 +81,7 @@ El prototipo guarda informacion en el dispositivo con `localStorage`. Para uso m
 2. API backend para reglas de negocio, permisos y auditoria.
 3. Integracion con proveedor autorizado de facturacion electronica.
 4. Backups automaticos y ambientes separados para demo, pruebas y produccion.
+5. Kardex, bodegas, listas de precios, CUFE, QR, links de pago y auditoria por usuario.
 
 ## Base de datos
 

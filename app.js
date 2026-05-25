@@ -30,9 +30,9 @@ const defaultData = {
     { name: "Contabilidad", email: "contabilidad@empresa.com", role: "Contador", status: "Invitado" }
   ],
   invoices: [
-    { id: "FE-1048", customer: "Drogueria Central", status: "Pagada", date: "2026-05-24", subtotal: 1280000, tax: 243200 },
-    { id: "FE-1047", customer: "Mercado La 80", status: "Pendiente", date: "2026-05-23", subtotal: 760000, tax: 144400 },
-    { id: "FE-1046", customer: "Cafe Norte", status: "Pagada", date: "2026-05-23", subtotal: 420000, tax: 79800 }
+    { id: "FE-1048", customer: "Drogueria Central", product: "Plancha industrial", quantity: 1, status: "Pagada", date: "2026-05-24", subtotal: 1280000, tax: 243200, dianStatus: "Validada", paymentLink: "https://pay.quantroxsystems.cloud/FE-1048" },
+    { id: "FE-1047", customer: "Mercado La 80", product: "Venta general", quantity: 1, status: "Pendiente", date: "2026-05-23", subtotal: 760000, tax: 144400, dianStatus: "Por enviar", paymentLink: "https://pay.quantroxsystems.cloud/FE-1047" },
+    { id: "FE-1046", customer: "Cafe Norte", product: "Servicio tecnico", quantity: 1, status: "Pagada", date: "2026-05-23", subtotal: 420000, tax: 79800, dianStatus: "Validada", paymentLink: "https://pay.quantroxsystems.cloud/FE-1046" }
   ],
   pos: {
     register: "Caja principal",
@@ -100,10 +100,12 @@ const defaultData = {
     { title: "Integraciones abiertas", category: "API", value: "Preparado para pagos, WhatsApp, e-commerce, bancos y proveedores autorizados.", status: "Listo" }
   ],
   compliance: [
-    { item: "Facturacion electronica", owner: "Ventas", status: "Preparado" },
-    { item: "POS electronico", owner: "Caja", status: "Preparado" },
+    { item: "Facturacion electronica", owner: "Ventas", status: "Interfaz lista" },
+    { item: "POS electronico", owner: "Caja", status: "Interfaz lista" },
     { item: "Nomina electronica", owner: "Talento", status: "Pendiente API" },
-    { item: "Documento soporte", owner: "Compras", status: "Pendiente API" }
+    { item: "Documento soporte", owner: "Compras", status: "Pendiente API" },
+    { item: "Notas credito/debito", owner: "Contabilidad", status: "Pendiente API" },
+    { item: "Eventos de recepcion", owner: "Compras", status: "Pendiente API" }
   ],
   integrations: [
     { name: "WhatsApp", use: "Cobros, soporte y envio de reportes", status: "Activo" },
@@ -325,7 +327,11 @@ async function loadCloudData() {
       dbId: item.id,
       id: item.number,
       customer: "Cliente registrado",
+      product: "Venta sincronizada",
+      quantity: 1,
       status: item.status,
+      dianStatus: item.dian_status || "Por enviar",
+      paymentLink: item.payment_link || "",
       date: item.issued_at,
       subtotal: Number(item.subtotal || 0),
       tax: Number(item.tax || 0)
@@ -386,6 +392,8 @@ async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountin
     company_id: data.company.id,
     number: invoice.id,
     status: invoice.status,
+    dian_status: invoice.dianStatus || "Por enviar",
+    payment_link: getInvoicePaymentLink(invoice),
     subtotal: invoice.subtotal,
     tax: invoice.tax,
     issued_at: invoice.date
@@ -678,6 +686,50 @@ function renderActiveModule() {
   return renderers[activeModule]();
 }
 
+function getInvoiceTotal(invoice) {
+  return Number(invoice.subtotal || 0) + Number(invoice.tax || 0);
+}
+
+function getInvoicePaymentLink(invoice) {
+  return invoice.paymentLink || `https://pay.quantroxsystems.cloud/${encodeURIComponent(invoice.id)}`;
+}
+
+function getInvoiceWhatsAppUrl(invoice) {
+  const text = `Hola ${invoice.customer}, te compartimos la factura ${invoice.id} por ${formatMoney(getInvoiceTotal(invoice))}. Puedes pagar aqui: ${getInvoicePaymentLink(invoice)}`;
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+function renderInvoiceActions(invoice) {
+  return `
+    <div class="row-actions">
+      <button class="mini-action" type="button" data-print-invoice="${escapeHtml(invoice.id)}">PDF</button>
+      <a class="mini-action" href="${getInvoiceWhatsAppUrl(invoice)}" target="_blank" rel="noopener">WhatsApp</a>
+      ${invoice.status !== "Pagada" ? `<button class="mini-action success" type="button" data-mark-paid="${escapeHtml(invoice.id)}">Pagar</button>` : ""}
+    </div>
+  `;
+}
+
+function getKardexRows() {
+  let balance = 0;
+  return data.inventoryMovements.slice().reverse().map((item) => {
+    const product = data.inventory.find((entry) => entry.name === item.product);
+    const unitCost = product ? Number(product.cost || 0) : 0;
+    const quantity = Number(item.quantity || 0);
+    balance += item.type === "Salida" ? -quantity : quantity;
+    return {
+      ...item,
+      unitCost,
+      totalCost: unitCost * quantity,
+      balance
+    };
+  }).reverse();
+}
+
+function getDianProgress() {
+  const done = data.compliance.filter((item) => ["Listo", "Activo", "Validada", "Interfaz lista"].includes(item.status)).length;
+  return Math.round((done / data.compliance.length) * 100);
+}
+
 function renderQuickBot() {
   const bot = data.quickBot;
   const suggested = bot.answers.slice(0, 5);
@@ -749,6 +801,82 @@ function addBotResponse(question) {
   render();
 }
 
+function printInvoice(invoiceId) {
+  const invoice = data.invoices.find((item) => item.id === invoiceId);
+  if (!invoice) {
+    return;
+  }
+
+  const printable = window.open("", "_blank", "width=900,height=720");
+  if (!printable) {
+    window.alert("Permite ventanas emergentes para generar el PDF.");
+    return;
+  }
+
+  const total = getInvoiceTotal(invoice);
+  printable.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeHtml(invoice.id)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 40px; color: #0f172a; }
+          .invoice { max-width: 760px; margin: 0 auto; }
+          .top { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0f766e; padding-bottom: 20px; }
+          h1 { margin: 0; font-size: 34px; }
+          h2 { margin: 0 0 8px; font-size: 18px; color: #0f766e; }
+          table { width: 100%; margin-top: 28px; border-collapse: collapse; }
+          th, td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+          .total { margin-top: 24px; text-align: right; font-size: 22px; font-weight: 800; }
+          .note { margin-top: 28px; padding: 14px; background: #ecfdf5; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <main class="invoice">
+          <section class="top">
+            <div>
+              <h2>${escapeHtml(data.company.name)}</h2>
+              <p>NIT ${escapeHtml(data.company.nit)}<br>${escapeHtml(data.company.city)}<br>${escapeHtml(data.company.email)}</p>
+            </div>
+            <div>
+              <h1>${escapeHtml(invoice.id)}</h1>
+              <p>Fecha: ${escapeHtml(invoice.date)}<br>Estado: ${escapeHtml(invoice.status)}<br>DIAN: ${escapeHtml(invoice.dianStatus || "Borrador")}</p>
+            </div>
+          </section>
+          <p><b>Cliente:</b> ${escapeHtml(invoice.customer)}</p>
+          <table>
+            <thead><tr><th>Producto</th><th>Cantidad</th><th>Subtotal</th><th>IVA</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>${escapeHtml(invoice.product || "Venta general")}</td>
+                <td>${escapeHtml(String(invoice.quantity || 1))}</td>
+                <td>${formatMoney(invoice.subtotal)}</td>
+                <td>${formatMoney(invoice.tax)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="total">Total ${formatMoney(total)}</div>
+          <div class="note">Link de pago: ${escapeHtml(getInvoicePaymentLink(invoice))}</div>
+        </main>
+        <script>window.print();</script>
+      </body>
+    </html>
+  `);
+  printable.document.close();
+}
+
+function markInvoicePaid(invoiceId) {
+  const invoice = data.invoices.find((item) => item.id === invoiceId);
+  if (!invoice) {
+    return;
+  }
+
+  invoice.status = "Pagada";
+  data.tasks.unshift({ text: `Conciliar pago de ${invoice.id}`, done: false });
+  saveData();
+  render();
+}
+
 function renderHome() {
   const totals = getTotals();
   return `
@@ -806,6 +934,7 @@ function renderHome() {
 function renderInvoices() {
   const totals = getTotals();
   const firstProduct = data.inventory[0];
+  const dianProgress = getDianProgress();
   return `
     <section class="summary-grid">
       ${metric("Facturado", formatMoney(totals.sales), `${data.invoices.length} documentos`)}
@@ -832,6 +961,10 @@ function renderInvoices() {
       </article>
       <article class="panel">
         <h3>Estado DIAN <span class="panel-label">Integracion</span></h3>
+        <div class="progress-item">
+          <span><b>Preparacion tecnica</b><b>${dianProgress}%</b></span>
+          <div class="progress-track"><i style="width:${dianProgress}%"></i></div>
+        </div>
         <ul class="insight-list">
           <li><span>Modo actual</span><b>Demo comercial</b></li>
           <li><span>Siguiente paso</span><b>Proveedor autorizado por API</b></li>
@@ -840,12 +973,14 @@ function renderInvoices() {
         </ul>
       </article>
     </section>
-    ${renderTable("Facturas recientes", ["Numero", "Cliente", "Producto", "Estado", "Total"], data.invoices.map((item) => [
+    ${renderTable("Facturas recientes", ["Numero", "Cliente", "Producto", "DIAN", "Estado", "Total", "Acciones"], data.invoices.map((item) => [
       item.id,
       item.customer,
       item.product || "Venta general",
+      badge(item.dianStatus || "Borrador", item.dianStatus === "Validada" ? "good" : "info"),
       badge(item.status, item.status === "Pagada" ? "good" : "warn"),
-      formatMoney(item.subtotal + item.tax)
+      formatMoney(getInvoiceTotal(item)),
+      renderInvoiceActions(item)
     ]))}
   `;
 }
@@ -885,6 +1020,7 @@ function renderPos() {
 
 function renderInventory() {
   const totals = getTotals();
+  const kardexRows = getKardexRows();
   return `
     <section class="summary-grid">
       ${metric("Valor inventario", formatMoney(totals.inventoryValue), "Costo estimado")}
@@ -902,6 +1038,15 @@ function renderInventory() {
         <button class="primary-button" type="submit">Guardar</button>
       </form>
     </section>
+    ${renderTable("Kardex valorizado", ["Fecha", "Tipo", "Producto", "Cantidad", "Costo unit.", "Valor", "Saldo"], kardexRows.map((item) => [
+      item.date,
+      badge(item.type, item.type === "Entrada" ? "good" : "warn"),
+      item.product,
+      item.quantity,
+      formatMoney(item.unitCost),
+      formatMoney(item.totalCost),
+      item.balance
+    ]))}
     ${renderTable("Movimientos de inventario", ["Fecha", "Tipo", "Producto", "Cantidad", "Origen"], data.inventoryMovements.map((item) => [
       item.date,
       badge(item.type, item.type === "Entrada" ? "good" : "warn"),
@@ -1254,7 +1399,12 @@ function renderPortal() {
         item.id,
         item.customer,
         badge(item.status, item.status === "Pagada" ? "good" : "warn"),
-        formatMoney(item.subtotal + item.tax)
+        formatMoney(getInvoiceTotal(item))
+      ]))}
+      ${renderMiniTable("Acciones de cobro", ["Factura", "Canal", "Accion"], pendingInvoices.map((item) => [
+        item.id,
+        "WhatsApp + pago",
+        renderInvoiceActions(item)
       ]))}
     </section>
   `;
@@ -1397,6 +1547,11 @@ function renderSettings() {
       item.role,
       badge(item.status, item.status === "Activo" ? "good" : "warn")
     ]))}
+    ${renderTable("Checklist DIAN y documentos", ["Documento", "Responsable", "Estado"], data.compliance.map((item) => [
+      item.item,
+      item.owner,
+      badge(item.status, ["Listo", "Activo", "Interfaz lista"].includes(item.status) ? "good" : "warn")
+    ]))}
   `;
 }
 
@@ -1460,7 +1615,9 @@ function bindModuleEvents() {
         status: String(form.get("status")),
         date: new Date().toISOString().slice(0, 10),
         subtotal,
-        tax: Math.round(subtotal * 0.19)
+        tax: Math.round(subtotal * 0.19),
+        dianStatus: "Por enviar",
+        paymentLink: `https://pay.quantroxsystems.cloud/${invoiceNumber}`
       };
       const inventoryMovement = {
         date: new Date().toISOString().slice(0, 10),
@@ -1647,6 +1804,18 @@ function bindModuleEvents() {
     });
   });
 
+  document.querySelectorAll("[data-print-invoice]").forEach((button) => {
+    button.addEventListener("click", () => {
+      printInvoice(button.dataset.printInvoice);
+    });
+  });
+
+  document.querySelectorAll("[data-mark-paid]").forEach((button) => {
+    button.addEventListener("click", () => {
+      markInvoicePaid(button.dataset.markPaid);
+    });
+  });
+
   const botForm = document.querySelector("#botForm");
   if (botForm) {
     botForm.addEventListener("submit", (event) => {
@@ -1698,7 +1867,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=12").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=13").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });

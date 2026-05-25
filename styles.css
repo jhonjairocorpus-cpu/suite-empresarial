@@ -301,6 +301,32 @@ h3 {
   color: var(--danger);
 }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mini-action {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  color: var(--ink);
+  background: #fff;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.mini-action.success {
+  color: #fff;
+  border-color: transparent;
+  background: var(--accent);
+}
+
 .avatar-button {
   width: 42px;
   padding: 0;
