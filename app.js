@@ -1073,23 +1073,76 @@ function render() {
 function renderLogin() {
   const cloudConfigured = isCloudConfigured();
   app.innerHTML = `
-    <main class="login-screen">
-      <section class="login-copy">
+    <main class="public-site">
+      <header class="public-topbar">
+        <a class="brand" href="https://quantroxsystems.cloud/">
+          <span class="brand-mark">Q</span>
+          <span><strong>Quantrox Suite</strong><small>Software empresarial</small></span>
+        </a>
+        <nav class="public-nav" aria-label="Navegacion publica">
+          <a href="#planes">Planes</a>
+          <a href="#funciones">Funciones</a>
+          <a href="#comprar">Proceso</a>
+          <a href="#acceso">Clientes</a>
+        </nav>
+        <a class="primary-button public-cta" href="https://wa.me/573218247072?text=Hola%20Quantrox%20Systems,%20quiero%20cotizar%20la%20Suite%20Empresarial" target="_blank" rel="noopener">Cotizar</a>
+      </header>
+      <section class="public-hero">
         <a class="brand" href="https://quantroxsystems.cloud/">
           <span class="brand-mark">Q</span>
           <span><strong>Quantrox Suite</strong><small>Plataforma empresarial</small></span>
         </a>
-        <h1>Tu empresa completa en una sola app.</h1>
-        <p>Facturacion, POS, inventario, contabilidad, nomina, clientes y reportes listos para operar desde Android, iPhone, iPad, Windows y navegador.</p>
-        <div class="hero-actions">
-          ${badge("Multiempresa", "good")}
-          ${badge("PWA instalable", "info")}
-          ${badge(cloudConfigured ? "Supabase activo" : "Lista para base de datos", cloudConfigured ? "good" : "warn")}
+        <p class="eyebrow">Suite empresarial para Colombia</p>
+        <h1>Invierte en una app que conecta ventas, inventario y contabilidad.</h1>
+        <p>Elige un plan, creamos tu cuenta y operas desde oficina, celular o navegador con datos sincronizados en la nube.</p>
+        <div class="public-tabs" id="planes">
+          <button class="active" type="button">Facturacion + Inventario</button>
+          <button type="button">POS</button>
+          <button type="button">Contabilidad</button>
+          <button type="button">Nomina</button>
+          <button type="button">Suite completa</button>
         </div>
       </section>
+      <section class="purchase-steps" id="comprar">
+        <span class="active"><b>1</b><strong>Elige un plan</strong></span>
+        <i></i>
+        <span><b>2</b><strong>Creamos tu cuenta</strong></span>
+        <i></i>
+        <span><b>3</b><strong>Instalas la app</strong></span>
+      </section>
+
+      <section class="pricing-grid">
+        ${renderPublicPlan("Inicial", "Para empezar organizado", "$ 0", ["Inventario base", "Clientes", "Contabilidad inicial", "Soporte de activacion"], "Solicitar activacion")}
+        ${renderPublicPlan("Empresarial", "Operacion diaria conectada", "$ 79.900", ["Facturacion conectada a stock", "Comparativos contables", "Usuarios y bitacora", "PWA para celular y oficina"], "Comprar plan", true)}
+        ${renderPublicPlan("A medida", "Para procesos propios", "Cotizar", ["Automatizaciones", "Portal de clientes", "Integraciones WhatsApp/pagos", "Acompanamiento Quantrox"], "Hablar con asesor")}
+      </section>
+
+      <section class="public-feature-grid" id="funciones">
+        ${[
+          ["Facturacion", "Venta productos y descuenta inventario automaticamente."],
+          ["Inventario", "Stock, alertas, movimientos y kardex valorizado."],
+          ["Contabilidad", "Compara ventas, gastos, utilidad y margen por meses."],
+          ["Usuarios", "Accesos por empresa con historial de cambios."],
+          ["PWA", "Instalable en Android, iPhone, Windows y navegador."],
+          ["DIAN", "Modo prueba y arquitectura lista para proveedor autorizado."]
+        ].map(([title, text]) => `
+          <article>
+            <span>${escapeHtml(title.charAt(0))}</span>
+            <h3>${escapeHtml(title)}</h3>
+            <p>${escapeHtml(text)}</p>
+          </article>
+        `).join("")}
+      </section>
+
+      <section class="public-access" id="acceso">
+        <div>
+          <p class="eyebrow">Portal de clientes</p>
+          <h2>Si ya compraste la app, entra con el usuario asignado.</h2>
+          <p>Los clientes activos operan con Supabase, historial de cambios y datos separados por empresa.</p>
+        </div>
       <section class="login-panel">
         <p class="eyebrow">${cloudConfigured ? "Acceso seguro" : "Acceso local"}</p>
-        <h2>${cloudConfigured ? "Entrar con Supabase" : "Entrar a la suite"}</h2>
+        <h2>${cloudConfigured ? "Iniciar sesion" : "Entrar a la suite"}</h2>
         ${cloudNotice ? `<p class="cloud-notice">${escapeHtml(cloudNotice)}</p>` : ""}
         ${cloudError ? `<p class="cloud-error">${escapeHtml(cloudError)}</p>` : ""}
         <form id="loginForm" class="form-grid single">
@@ -1098,7 +1151,6 @@ function renderLogin() {
             <label>Clave <input name="password" required type="password" placeholder="Clave Supabase"></label>
             <button class="primary-button" type="submit">Ingresar</button>
             <button class="text-button" type="button" data-reset-password>Recuperar contraseña</button>
-            <button class="secondary-button" type="button" data-demo-login>Usar modo local</button>
           ` : `
             <label>Empresa <input name="company" value="${escapeHtml(data.company.name)}" required></label>
             <label>Usuario <input name="user" value="${escapeHtml(data.company.user)}" required></label>
@@ -1106,6 +1158,7 @@ function renderLogin() {
             <button class="primary-button" type="submit">Ingresar</button>
           `}
         </form>
+      </section>
       </section>
     </main>
   `;
@@ -1172,6 +1225,22 @@ function renderLogin() {
       renderLogin();
     });
   }
+}
+
+function renderPublicPlan(name, description, price, features, action, highlighted = false) {
+  return `
+    <article class="pricing-card ${highlighted ? "featured" : ""}">
+      ${highlighted ? `<span class="plan-ribbon">Recomendado</span>` : ""}
+      <h3>${escapeHtml(name)}</h3>
+      <p>${escapeHtml(description)}</p>
+      <strong>${escapeHtml(price)}</strong>
+      <small>${price.startsWith("$") ? "mensual desde" : "segun alcance"}</small>
+      <ul>
+        ${features.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ul>
+      <a class="${highlighted ? "primary-button" : "secondary-button"}" href="https://wa.me/573218247072?text=${encodeURIComponent(`Hola Quantrox Systems, quiero ${action} de ${name}`)}" target="_blank" rel="noopener">${escapeHtml(action)}</a>
+    </article>
+  `;
 }
 
 function renderPasswordRecovery() {

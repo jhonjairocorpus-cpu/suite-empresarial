@@ -22,6 +22,7 @@ Aplicacion PWA para operar una suite empresarial desde navegador o como app inst
 - Configuracion multiempresa
 - Panel de activacion Supabase con estado de sesion, empresa vinculada y pendientes
 - Historial de cambios por usuario para trazabilidad entre oficina, celular y web
+- Interfaz publica de planes, funciones y compra para interesados sin usuario
 
 La app funciona como sitio web estatico y puede publicarse en GitHub Pages. Una vez publicada con HTTPS, los usuarios pueden instalarla en Android, iPhone, iPad, Windows y macOS.
 
