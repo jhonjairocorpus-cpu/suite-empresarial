@@ -771,6 +771,132 @@ select:focus {
   display: none;
 }
 
+.quick-bot {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 10;
+}
+
+.bot-fab {
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 999px;
+  color: #07111f;
+  background: linear-gradient(135deg, var(--gold), #fff3b0);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.24);
+  font-size: 1.35rem;
+  font-weight: 950;
+}
+
+.bot-panel {
+  position: absolute;
+  right: 0;
+  bottom: 72px;
+  display: none;
+  width: min(360px, calc(100vw - 28px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.22);
+}
+
+.quick-bot.open .bot-panel {
+  display: block;
+}
+
+.bot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #0b1220, var(--accent));
+}
+
+.bot-header h3 {
+  margin-bottom: 0;
+}
+
+.icon-mini {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 950;
+}
+
+.bot-messages,
+.bot-suggestions,
+.bot-form {
+  padding: 14px;
+}
+
+.bot-messages {
+  display: grid;
+  max-height: 250px;
+  gap: 10px;
+  overflow: auto;
+  background: #f8fafc;
+}
+
+.bot-message {
+  width: fit-content;
+  max-width: 92%;
+  margin: 0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  line-height: 1.45;
+}
+
+.bot-message.bot {
+  color: var(--ink);
+  background: #fff;
+}
+
+.bot-message.user {
+  justify-self: end;
+  color: #fff;
+  background: var(--accent);
+}
+
+.bot-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bot-suggestions button {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: var(--ink);
+  background: #fff;
+  font-weight: 850;
+}
+
+.bot-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.bot-whatsapp {
+  display: block;
+  border-top: 1px solid var(--line);
+  padding: 12px 14px;
+  color: var(--accent);
+  font-weight: 950;
+  text-align: center;
+}
+
 @media (max-width: 1060px) {
   .sidebar {
     position: static;
@@ -850,5 +976,14 @@ select:focus {
   .balanced-title {
     font-size: 2.55rem;
     line-height: 1;
+  }
+
+  .quick-bot {
+    right: 14px;
+    bottom: 14px;
+  }
+
+  .bot-form {
+    grid-template-columns: 1fr;
   }
 }

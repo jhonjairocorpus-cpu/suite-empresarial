@@ -1,4 +1,4 @@
-const STORAGE_KEY = "quantrox-suite-data-v9";
+const STORAGE_KEY = "quantrox-suite-data-v10";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -110,7 +110,23 @@ const defaultData = {
     { name: "Pasarela de pagos", use: "Pagos de facturas y links de cobro", status: "Planeado" },
     { name: "Proveedor DIAN", use: "CUFE, XML, QR y validacion", status: "Planeado" },
     { name: "E-commerce", use: "Ventas online sincronizadas", status: "Planeado" }
-  ]
+  ],
+  quickBot: {
+    open: false,
+    messages: [
+      { from: "bot", text: "Hola, soy el bot rapido de Quantrox. Te ayudo con facturacion, inventario, portal, pagos, PWA y soporte." }
+    ],
+    answers: [
+      { q: "Como facturo", a: "Entra a Facturacion, selecciona cliente, producto del inventario, cantidad y genera la factura. El stock baja automaticamente.", nav: "invoices" },
+      { q: "Inventario", a: "En Inventario ves stock, alertas y movimientos. Cada factura crea una salida automatica.", nav: "inventory" },
+      { q: "Portal cliente", a: "El Portal permite consultar facturas, pagos, estado de cuenta y soporte por WhatsApp.", nav: "portal" },
+      { q: "Instalar app", a: "Desde Chrome o Edge usa Instalar. En iPhone abre Safari y usa Agregar a pantalla de inicio.", nav: "settings" },
+      { q: "Supabase", a: "En Ajustes ves el estado cloud. Para activarlo hay que crear Supabase, ejecutar el SQL y poner URL + anon key.", nav: "settings" },
+      { q: "Pagos", a: "Los pagos estan preparados para integrar pasarela y links de cobro en el portal del cliente.", nav: "automations" },
+      { q: "WhatsApp", a: "WhatsApp queda como canal de cobro, soporte y envio de reportes. El bot puede escalar a humano.", nav: "automations" },
+      { q: "Soporte", a: "Puedes pedir soporte humano por WhatsApp desde el bot o desde Solicitar demo.", nav: "portal" }
+    ]
+  }
 };
 
 const moduleMeta = {
@@ -546,6 +562,7 @@ function render() {
       </header>
       <section id="modulePanel">${renderActiveModule()}</section>
     </main>
+    ${renderQuickBot()}
   `;
 
   bindShellEvents();
@@ -659,6 +676,77 @@ function renderActiveModule() {
   };
 
   return renderers[activeModule]();
+}
+
+function renderQuickBot() {
+  const bot = data.quickBot;
+  const suggested = bot.answers.slice(0, 5);
+
+  return `
+    <section class="quick-bot ${bot.open ? "open" : ""}" aria-label="Bot de respuestas rapidas">
+      <button class="bot-fab" type="button" data-bot-toggle aria-label="Abrir bot de respuestas rapidas">?</button>
+      <div class="bot-panel">
+        <header class="bot-header">
+          <div>
+            <span class="panel-label">Respuestas rapidas</span>
+            <h3>Bot Quantrox</h3>
+          </div>
+          <button class="icon-mini" type="button" data-bot-toggle aria-label="Cerrar bot">x</button>
+        </header>
+        <div class="bot-messages">
+          ${bot.messages.slice(-6).map((message) => `
+            <p class="bot-message ${message.from === "user" ? "user" : "bot"}">${escapeHtml(message.text)}</p>
+          `).join("")}
+        </div>
+        <div class="bot-suggestions">
+          ${suggested.map((item) => `<button type="button" data-bot-question="${escapeHtml(item.q)}">${escapeHtml(item.q)}</button>`).join("")}
+        </div>
+        <form class="bot-form" id="botForm">
+          <input name="question" placeholder="Pregunta rapida..." autocomplete="off">
+          <button class="primary-button" type="submit">Enviar</button>
+        </form>
+        <a class="bot-whatsapp" href="https://wa.me/573218247072?text=Hola%20Quantrox,%20necesito%20ayuda%20con%20la%20suite" target="_blank" rel="noopener">Escalar a WhatsApp</a>
+      </div>
+    </section>
+  `;
+}
+
+function findBotAnswer(question) {
+  const normalized = question.toLowerCase();
+  const exact = data.quickBot.answers.find((item) => item.q.toLowerCase() === normalized);
+  if (exact) {
+    return exact;
+  }
+
+  return data.quickBot.answers.find((item) => {
+    const option = item.q.toLowerCase();
+    return normalized.split(/\s+/).some((word) => word.length > 3 && option.includes(word));
+  });
+}
+
+function addBotResponse(question) {
+  const cleanQuestion = question.trim();
+  if (!cleanQuestion) {
+    return;
+  }
+
+  const answer = findBotAnswer(cleanQuestion);
+  data.quickBot.messages.push({ from: "user", text: cleanQuestion });
+
+  if (answer) {
+    data.quickBot.messages.push({ from: "bot", text: answer.a });
+    activeModule = answer.nav;
+  } else {
+    data.quickBot.messages.push({
+      from: "bot",
+      text: "No tengo esa respuesta lista aun. Te puedo escalar a WhatsApp o crear una tarea para soporte."
+    });
+    data.tasks.unshift({ text: `Responder consulta: ${cleanQuestion}`, done: false });
+  }
+
+  data.quickBot.open = true;
+  saveData();
+  render();
 }
 
 function renderHome() {
@@ -1544,6 +1632,29 @@ function bindModuleEvents() {
       render();
     });
   }
+
+  document.querySelectorAll("[data-bot-toggle]").forEach((button) => {
+    button.addEventListener("click", () => {
+      data.quickBot.open = !data.quickBot.open;
+      saveData();
+      render();
+    });
+  });
+
+  document.querySelectorAll("[data-bot-question]").forEach((button) => {
+    button.addEventListener("click", () => {
+      addBotResponse(button.dataset.botQuestion);
+    });
+  });
+
+  const botForm = document.querySelector("#botForm");
+  if (botForm) {
+    botForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const form = new FormData(event.currentTarget);
+      addBotResponse(String(form.get("question") || ""));
+    });
+  }
 }
 
 function bindInstallButton() {
@@ -1587,7 +1698,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=10").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=11").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });

@@ -13,6 +13,7 @@ Aplicacion PWA para operar una suite empresarial desde navegador o como app inst
 - Asistente empresarial con recomendaciones operativas
 - Ventajas Quantrox: automatizaciones, cumplimiento, portal cliente e integraciones
 - Portal de clientes, automatizaciones y personalizacion de marca
+- Bot de respuestas rapidas con escalamiento a WhatsApp
 - Configuracion multiempresa
 
 La app funciona como sitio web estatico y puede publicarse en GitHub Pages. Una vez publicada con HTTPS, los usuarios pueden instalarla en Android, iPhone, iPad, Windows y macOS.
