@@ -107,6 +107,25 @@ a {
   line-height: 1.45;
 }
 
+.cloud-notice {
+  border: 1px solid rgba(15, 118, 110, 0.22);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--accent);
+  background: #ecfdf5;
+  line-height: 1.45;
+}
+
+.text-button {
+  min-height: 36px;
+  border: 0;
+  padding: 4px;
+  color: var(--accent);
+  background: transparent;
+  font-weight: 950;
+  text-align: center;
+}
+
 .sidebar {
   position: fixed;
   inset: 0 auto 0 max(0px, calc((100vw - 1440px) / 2));

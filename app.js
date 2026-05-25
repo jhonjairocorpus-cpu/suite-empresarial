@@ -173,6 +173,8 @@ let cloudClient = null;
 let cloudSession = null;
 let cloudReady = false;
 let cloudError = "";
+let cloudNotice = "";
+let passwordRecoveryMode = false;
 
 const app = document.querySelector("#app");
 
@@ -189,6 +191,12 @@ function isCloudConfigured() {
     !config.supabaseUrl.includes("TU-PROYECTO") &&
     !config.supabaseAnonKey.includes("TU-ANON")
   );
+}
+
+function isPasswordRecoveryUrl() {
+  const search = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  return search.get("recovery") === "1" || search.get("type") === "recovery" || hash.get("type") === "recovery";
 }
 
 function initCloudClient() {
@@ -240,6 +248,42 @@ async function signInCloud(email, password) {
 
   cloudSession = authData.session;
   await loadCloudData();
+}
+
+async function sendPasswordReset(email) {
+  if (!cloudReady) {
+    throw new Error("Supabase no esta activo.");
+  }
+
+  const redirectUrl = new URL(window.location.href);
+  redirectUrl.search = "?recovery=1";
+  redirectUrl.hash = "";
+
+  const { error } = await cloudClient.auth.resetPasswordForEmail(email, {
+    redirectTo: redirectUrl.toString()
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function updateCloudPassword(password) {
+  if (!cloudReady) {
+    throw new Error("Supabase no esta activo.");
+  }
+
+  const { error } = await cloudClient.auth.updateUser({ password });
+  if (error) {
+    throw error;
+  }
+
+  passwordRecoveryMode = false;
+  cloudNotice = "Clave actualizada. Ya puedes entrar con tu nueva contraseña.";
+  await cloudClient.auth.signOut();
+  cloudSession = null;
+  authenticated = false;
+  localStorage.removeItem("quantrox-suite-auth");
 }
 
 async function loadCloudData() {
@@ -654,6 +698,11 @@ function render() {
   applyBrandTheme();
 
   if (!authenticated) {
+    if (passwordRecoveryMode && cloudReady) {
+      renderPasswordRecovery();
+      return;
+    }
+
     renderLogin();
     return;
   }
@@ -722,12 +771,14 @@ function renderLogin() {
       <section class="login-panel">
         <p class="eyebrow">${cloudConfigured ? "Acceso cloud" : "Acceso demo"}</p>
         <h2>${cloudConfigured ? "Entrar con Supabase" : "Entrar a la suite"}</h2>
+        ${cloudNotice ? `<p class="cloud-notice">${escapeHtml(cloudNotice)}</p>` : ""}
         ${cloudError ? `<p class="cloud-error">${escapeHtml(cloudError)}</p>` : ""}
         <form id="loginForm" class="form-grid single">
           ${cloudConfigured ? `
             <label>Correo <input name="email" required type="email" placeholder="usuario@empresa.com"></label>
             <label>Clave <input name="password" required type="password" placeholder="Clave Supabase"></label>
             <button class="primary-button" type="submit">Ingresar en cloud</button>
+            <button class="text-button" type="button" data-reset-password>Recuperar contraseña</button>
             <button class="secondary-button" type="button" data-demo-login>Usar demo local</button>
           ` : `
             <label>Empresa <input name="company" value="${escapeHtml(data.company.name)}" required></label>
@@ -746,6 +797,8 @@ function renderLogin() {
 
     try {
       if (cloudConfigured) {
+        cloudNotice = "";
+        cloudError = "";
         await signInCloud(String(form.get("email")).trim(), String(form.get("password")));
       } else {
         data.company.name = String(form.get("company")).trim();
@@ -776,6 +829,88 @@ function renderLogin() {
       render();
     });
   }
+
+  const resetButton = document.querySelector("[data-reset-password]");
+  if (resetButton) {
+    resetButton.addEventListener("click", async () => {
+      const form = new FormData(document.querySelector("#loginForm"));
+      const email = String(form.get("email") || "").trim();
+      if (!email) {
+        cloudError = "Escribe el correo del usuario creado para recuperar la contraseña.";
+        cloudNotice = "";
+        renderLogin();
+        return;
+      }
+
+      try {
+        await sendPasswordReset(email);
+        cloudError = "";
+        cloudNotice = "Si el correo pertenece a un usuario creado, Supabase enviara el enlace para cambiar la contraseña.";
+      } catch (error) {
+        cloudError = error.message || "No se pudo enviar el correo de recuperacion.";
+        cloudNotice = "";
+      }
+      renderLogin();
+    });
+  }
+}
+
+function renderPasswordRecovery() {
+  app.innerHTML = `
+    <main class="login-screen">
+      <section class="login-copy">
+        <a class="brand" href="https://quantroxsystems.cloud/">
+          <span class="brand-mark">Q</span>
+          <span><strong>Quantrox Suite</strong><small>Seguridad de acceso</small></span>
+        </a>
+        <h1>Crea una nueva contraseña segura.</h1>
+        <p>Este proceso solo funciona para usuarios registrados en Supabase. Despues de guardar la clave podras iniciar sesion nuevamente.</p>
+      </section>
+      <section class="login-panel">
+        <p class="eyebrow">Recuperacion cloud</p>
+        <h2>Nueva contraseña</h2>
+        ${cloudNotice ? `<p class="cloud-notice">${escapeHtml(cloudNotice)}</p>` : ""}
+        ${cloudError ? `<p class="cloud-error">${escapeHtml(cloudError)}</p>` : ""}
+        <form id="passwordRecoveryForm" class="form-grid single">
+          <label>Nueva clave <input name="password" required minlength="8" type="password" placeholder="Minimo 8 caracteres"></label>
+          <label>Confirmar clave <input name="confirmPassword" required minlength="8" type="password" placeholder="Repite la clave"></label>
+          <button class="primary-button" type="submit">Actualizar contraseña</button>
+          <button class="secondary-button" type="button" data-back-login>Volver al login</button>
+        </form>
+      </section>
+    </main>
+  `;
+
+  document.querySelector("#passwordRecoveryForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const password = String(form.get("password") || "");
+    const confirmPassword = String(form.get("confirmPassword") || "");
+
+    if (password !== confirmPassword) {
+      cloudError = "Las contraseñas no coinciden.";
+      cloudNotice = "";
+      renderPasswordRecovery();
+      return;
+    }
+
+    try {
+      await updateCloudPassword(password);
+      window.history.replaceState({}, "", window.location.pathname);
+      renderLogin();
+    } catch (error) {
+      cloudError = error.message || "No se pudo actualizar la contraseña.";
+      cloudNotice = "";
+      renderPasswordRecovery();
+    }
+  });
+
+  document.querySelector("[data-back-login]").addEventListener("click", () => {
+    passwordRecoveryMode = false;
+    cloudError = "";
+    window.history.replaceState({}, "", window.location.pathname);
+    renderLogin();
+  });
 }
 
 async function logout() {
@@ -2020,7 +2155,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=15").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=16").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });
@@ -2028,6 +2163,7 @@ if ("serviceWorker" in navigator) {
 
 async function initializeApp() {
   initCloudClient();
+  passwordRecoveryMode = isPasswordRecoveryUrl();
   await loadCloudSession();
   render();
 }

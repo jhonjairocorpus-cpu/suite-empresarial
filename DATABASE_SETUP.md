@@ -52,6 +52,20 @@ La `anon key` puede vivir en el navegador si las politicas RLS estan correctas. 
 5. Publicar la app.
 6. Entrar con correo y clave desde la pantalla de login.
 
+## Recuperacion de contraseña
+
+La app incluye `Recuperar contraseña` en el login cloud. Para que el enlace vuelva correctamente a la app publicada, en Supabase:
+
+1. Ir a `Authentication` > `URL Configuration`.
+2. En `Site URL`, usar la URL publicada de la suite.
+3. En `Redirect URLs`, agregar:
+
+```text
+https://jhonjairocorpus-cpu.github.io/suite-empresarial/*
+```
+
+Supabase solo enviara el flujo de recuperacion a usuarios registrados en Authentication.
+
 Cuando Supabase esta activo, la app usa `signInWithPassword`, carga la empresa del perfil y sincroniza nuevas facturas con inventario y contabilidad.
 
 Ejemplo para crear empresa y perfil desde el SQL Editor, despues de crear el usuario en Authentication:
