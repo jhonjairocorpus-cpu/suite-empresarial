@@ -98,6 +98,15 @@ a {
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.2);
 }
 
+.cloud-error {
+  border: 1px solid rgba(180, 35, 24, 0.22);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--danger);
+  background: #fef3f2;
+  line-height: 1.45;
+}
+
 .sidebar {
   position: fixed;
   inset: 0 auto 0 max(0px, calc((100vw - 1440px) / 2));

@@ -1,4 +1,4 @@
-const STORAGE_KEY = "quantrox-suite-data-v8";
+const STORAGE_KEY = "quantrox-suite-data-v9";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -149,8 +149,259 @@ let data = mergeData(loadData(), defaultData);
 let activeModule = "home";
 let authenticated = localStorage.getItem("quantrox-suite-auth") === "true";
 let deferredInstallPrompt = null;
+let cloudClient = null;
+let cloudSession = null;
+let cloudReady = false;
+let cloudError = "";
 
 const app = document.querySelector("#app");
+
+function getCloudConfig() {
+  return window.QUANTROX_CLOUD || {};
+}
+
+function isCloudConfigured() {
+  const config = getCloudConfig();
+  return Boolean(
+    config.enabled &&
+    config.supabaseUrl &&
+    config.supabaseAnonKey &&
+    !config.supabaseUrl.includes("TU-PROYECTO") &&
+    !config.supabaseAnonKey.includes("TU-ANON")
+  );
+}
+
+function initCloudClient() {
+  if (!isCloudConfigured()) {
+    cloudReady = false;
+    data.cloud.mode = "Demo local";
+    data.cloud.syncStatus = "Credenciales Supabase pendientes";
+    return;
+  }
+
+  if (!window.supabase || !window.supabase.createClient) {
+    cloudReady = false;
+    cloudError = "No se cargo el SDK de Supabase.";
+    data.cloud.syncStatus = cloudError;
+    return;
+  }
+
+  const config = getCloudConfig();
+  cloudClient = window.supabase.createClient(config.supabaseUrl, config.supabaseAnonKey);
+  cloudReady = true;
+  data.cloud.mode = "Cloud conectado";
+  data.cloud.syncStatus = "Supabase listo";
+}
+
+async function loadCloudSession() {
+  if (!cloudReady) {
+    return;
+  }
+
+  const { data: sessionData, error } = await cloudClient.auth.getSession();
+  if (error) {
+    cloudError = error.message;
+    return;
+  }
+
+  cloudSession = sessionData.session;
+  if (cloudSession) {
+    authenticated = true;
+    localStorage.setItem("quantrox-suite-auth", "true");
+    await loadCloudData();
+  }
+}
+
+async function signInCloud(email, password) {
+  const { data: authData, error } = await cloudClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    throw error;
+  }
+
+  cloudSession = authData.session;
+  await loadCloudData();
+}
+
+async function loadCloudData() {
+  if (!cloudReady || !cloudSession?.user) {
+    return;
+  }
+
+  const { data: profile, error: profileError } = await cloudClient
+    .from("profiles")
+    .select("id, company_id, full_name, role, status")
+    .eq("id", cloudSession.user.id)
+    .single();
+
+  if (profileError) {
+    cloudError = profileError.message;
+    data.cloud.syncStatus = `Perfil pendiente: ${profileError.message}`;
+    return;
+  }
+
+  const companyId = profile.company_id;
+  const [
+    companyResult,
+    customersResult,
+    productsResult,
+    invoicesResult,
+    accountingResult,
+    employeesResult,
+    tasksResult,
+    movementsResult
+  ] = await Promise.all([
+    cloudClient.from("companies").select("*").eq("id", companyId).single(),
+    cloudClient.from("customers").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("products").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("invoices").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("accounting_entries").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("employees").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("tasks").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("inventory_movements").select("*").eq("company_id", companyId).order("created_at", { ascending: false })
+  ]);
+
+  if (companyResult.data) {
+    data.company = {
+      ...data.company,
+      id: companyResult.data.id,
+      name: companyResult.data.name,
+      nit: companyResult.data.nit,
+      city: companyResult.data.city || data.company.city,
+      email: companyResult.data.email || data.company.email,
+      plan: companyResult.data.plan || data.company.plan,
+      user: profile.full_name,
+      commercialName: companyResult.data.name,
+      industry: data.company.industry
+    };
+  }
+
+  data.users = [{
+    name: profile.full_name,
+    email: cloudSession.user.email || "usuario@empresa.com",
+    role: profile.role,
+    status: profile.status
+  }];
+
+  if (customersResult.data?.length) {
+    data.customers = customersResult.data.map((item) => ({
+      id: item.id,
+      name: item.name,
+      channel: item.channel,
+      balance: Number(item.balance || 0),
+      contact: item.contact_email || ""
+    }));
+  }
+
+  if (productsResult.data?.length) {
+    data.inventory = productsResult.data.map((item) => ({
+      id: item.id,
+      sku: item.sku,
+      name: item.name,
+      stock: Number(item.stock || 0),
+      min: Number(item.min_stock || 0),
+      cost: Number(item.cost || 0),
+      price: Number(item.price || 0)
+    }));
+  }
+
+  if (invoicesResult.data?.length) {
+    data.invoices = invoicesResult.data.map((item) => ({
+      dbId: item.id,
+      id: item.number,
+      customer: "Cliente registrado",
+      status: item.status,
+      date: item.issued_at,
+      subtotal: Number(item.subtotal || 0),
+      tax: Number(item.tax || 0)
+    }));
+  }
+
+  if (accountingResult.data?.length) {
+    data.accounting = accountingResult.data.map((item) => ({
+      id: item.id,
+      detail: item.detail,
+      account: item.account,
+      type: item.type,
+      amount: Number(item.amount || 0)
+    }));
+  }
+
+  if (employeesResult.data?.length) {
+    data.payroll = employeesResult.data.map((item) => ({
+      id: item.id,
+      name: item.full_name,
+      role: item.role,
+      salary: Number(item.salary || 0),
+      status: item.status
+    }));
+  }
+
+  if (tasksResult.data?.length) {
+    data.tasks = tasksResult.data.map((item) => ({
+      id: item.id,
+      text: item.text,
+      done: item.done
+    }));
+  }
+
+  if (movementsResult.data?.length) {
+    data.inventoryMovements = movementsResult.data.map((item) => ({
+      id: item.id,
+      date: item.movement_date,
+      type: item.type,
+      product: item.product_id ? "Producto registrado" : "Movimiento",
+      quantity: Number(item.quantity || 0),
+      origin: item.origin
+    }));
+  }
+
+  data.cloud.mode = "Cloud conectado";
+  data.cloud.syncStatus = "Datos sincronizados";
+  data.cloud.lastBackup = new Date().toLocaleString("es-CO");
+  saveData();
+}
+
+async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountingEntry) {
+  if (!cloudReady || !cloudSession || !data.company.id || !product.id) {
+    return;
+  }
+
+  const { error: invoiceError } = await cloudClient.from("invoices").insert({
+    company_id: data.company.id,
+    number: invoice.id,
+    status: invoice.status,
+    subtotal: invoice.subtotal,
+    tax: invoice.tax,
+    issued_at: invoice.date
+  });
+
+  if (invoiceError) {
+    throw invoiceError;
+  }
+
+  await Promise.all([
+    cloudClient.from("products").update({ stock: product.stock }).eq("id", product.id),
+    cloudClient.from("inventory_movements").insert({
+      company_id: data.company.id,
+      product_id: product.id,
+      type: inventoryMovement.type,
+      quantity: inventoryMovement.quantity,
+      origin: inventoryMovement.origin,
+      movement_date: inventoryMovement.date
+    }),
+    cloudClient.from("accounting_entries").insert({
+      company_id: data.company.id,
+      detail: accountingEntry.detail,
+      account: accountingEntry.account,
+      type: accountingEntry.type,
+      amount: accountingEntry.amount,
+      entry_date: invoice.date
+    })
+  ]);
+
+  data.cloud.syncStatus = "Ultima factura sincronizada";
+  data.cloud.lastBackup = new Date().toLocaleString("es-CO");
+}
 
 function applyBrandTheme() {
   document.documentElement.style.setProperty("--accent", data.company.accent || "#0f766e");
@@ -304,6 +555,7 @@ function render() {
 }
 
 function renderLogin() {
+  const cloudConfigured = isCloudConfigured();
   app.innerHTML = `
     <main class="login-screen">
       <section class="login-copy">
@@ -316,34 +568,77 @@ function renderLogin() {
         <div class="hero-actions">
           ${badge("Multiempresa", "good")}
           ${badge("PWA instalable", "info")}
-          ${badge("Lista para base de datos", "warn")}
+          ${badge(cloudConfigured ? "Supabase activo" : "Lista para base de datos", cloudConfigured ? "good" : "warn")}
         </div>
       </section>
       <section class="login-panel">
-        <p class="eyebrow">Acceso demo</p>
-        <h2>Entrar a la suite</h2>
+        <p class="eyebrow">${cloudConfigured ? "Acceso cloud" : "Acceso demo"}</p>
+        <h2>${cloudConfigured ? "Entrar con Supabase" : "Entrar a la suite"}</h2>
+        ${cloudError ? `<p class="cloud-error">${escapeHtml(cloudError)}</p>` : ""}
         <form id="loginForm" class="form-grid single">
-          <label>Empresa <input name="company" value="${escapeHtml(data.company.name)}" required></label>
-          <label>Usuario <input name="user" value="${escapeHtml(data.company.user)}" required></label>
-          <label>NIT <input name="nit" value="${escapeHtml(data.company.nit)}" required></label>
-          <button class="primary-button" type="submit">Ingresar</button>
+          ${cloudConfigured ? `
+            <label>Correo <input name="email" required type="email" placeholder="usuario@empresa.com"></label>
+            <label>Clave <input name="password" required type="password" placeholder="Clave Supabase"></label>
+            <button class="primary-button" type="submit">Ingresar en cloud</button>
+            <button class="secondary-button" type="button" data-demo-login>Usar demo local</button>
+          ` : `
+            <label>Empresa <input name="company" value="${escapeHtml(data.company.name)}" required></label>
+            <label>Usuario <input name="user" value="${escapeHtml(data.company.user)}" required></label>
+            <label>NIT <input name="nit" value="${escapeHtml(data.company.nit)}" required></label>
+            <button class="primary-button" type="submit">Ingresar</button>
+          `}
         </form>
       </section>
     </main>
   `;
 
-  document.querySelector("#loginForm").addEventListener("submit", (event) => {
+  document.querySelector("#loginForm").addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    data.company.name = String(form.get("company")).trim();
-    data.company.user = String(form.get("user")).trim();
-    data.company.nit = String(form.get("nit")).trim();
-    authenticated = true;
-    localStorage.setItem("quantrox-suite-auth", "true");
-    saveData();
-    window.scrollTo(0, 0);
-    render();
+
+    try {
+      if (cloudConfigured) {
+        await signInCloud(String(form.get("email")).trim(), String(form.get("password")));
+      } else {
+        data.company.name = String(form.get("company")).trim();
+        data.company.user = String(form.get("user")).trim();
+        data.company.nit = String(form.get("nit")).trim();
+      }
+
+      authenticated = true;
+      localStorage.setItem("quantrox-suite-auth", "true");
+      saveData();
+      window.scrollTo(0, 0);
+      render();
+    } catch (error) {
+      cloudError = error.message || "No se pudo iniciar sesion.";
+      renderLogin();
+    }
   });
+
+  const demoButton = document.querySelector("[data-demo-login]");
+  if (demoButton) {
+    demoButton.addEventListener("click", () => {
+      cloudSession = null;
+      authenticated = true;
+      data.cloud.mode = "Demo local";
+      data.cloud.syncStatus = "Usando demo aunque Supabase este configurado";
+      localStorage.setItem("quantrox-suite-auth", "true");
+      saveData();
+      render();
+    });
+  }
+}
+
+async function logout() {
+  if (cloudReady && cloudSession) {
+    await cloudClient.auth.signOut();
+    cloudSession = null;
+  }
+
+  authenticated = false;
+  localStorage.removeItem("quantrox-suite-auth");
+  render();
 }
 
 function renderActiveModule() {
@@ -1038,15 +1333,13 @@ function bindShellEvents() {
   });
 
   document.querySelector("[data-action='logout']").addEventListener("click", () => {
-    authenticated = false;
-    localStorage.removeItem("quantrox-suite-auth");
-    render();
+    logout();
   });
 }
 
 function bindModuleEvents() {
   const formHandlers = {
-    invoiceForm(event) {
+    async invoiceForm(event) {
       const form = new FormData(event.currentTarget);
       const sku = String(form.get("productSku"));
       const quantity = Number(form.get("quantity"));
@@ -1070,7 +1363,7 @@ function bindModuleEvents() {
       const invoiceNumber = `FE-${1049 + data.invoices.length}`;
       const subtotal = product.price * quantity;
       product.stock -= quantity;
-      data.invoices.unshift({
+      const invoice = {
         id: invoiceNumber,
         customer: String(form.get("customer")).trim(),
         product: product.name,
@@ -1080,20 +1373,31 @@ function bindModuleEvents() {
         date: new Date().toISOString().slice(0, 10),
         subtotal,
         tax: Math.round(subtotal * 0.19)
-      });
-      data.inventoryMovements.unshift({
+      };
+      const inventoryMovement = {
         date: new Date().toISOString().slice(0, 10),
         type: "Salida",
         product: product.name,
         quantity,
         origin: `Factura ${invoiceNumber}`
-      });
-      data.accounting.unshift({
+      };
+      const accountingEntry = {
         detail: `Venta ${invoiceNumber} - ${product.name}`,
         account: "Ingresos",
         type: "Ingreso",
         amount: subtotal
-      });
+      };
+
+      data.invoices.unshift(invoice);
+      data.inventoryMovements.unshift(inventoryMovement);
+      data.accounting.unshift(accountingEntry);
+
+      try {
+        await syncInvoiceToCloud(invoice, product, inventoryMovement, accountingEntry);
+      } catch (error) {
+        cloudError = error.message || "No se pudo sincronizar la factura.";
+        data.cloud.syncStatus = "Factura guardada localmente, sincronizacion pendiente";
+      }
     },
     posForm(event) {
       const form = new FormData(event.currentTarget);
@@ -1169,9 +1473,9 @@ function bindModuleEvents() {
       return;
     }
 
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      handler(event);
+      await handler(event);
       saveData();
       render();
     });
@@ -1283,10 +1587,16 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=9").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=10").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });
 }
 
-render();
+async function initializeApp() {
+  initCloudClient();
+  await loadCloudSession();
+  render();
+}
+
+initializeApp();

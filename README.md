@@ -84,3 +84,9 @@ El prototipo guarda informacion en el dispositivo con `localStorage`. Para uso m
 La estructura inicial de produccion esta en `database/supabase-schema.sql`.
 
 Ver el paso a paso en `DATABASE_SETUP.md`.
+
+## Supabase cloud
+
+La app carga `@supabase/supabase-js@2` desde CDN y lee `cloud-config.js`.
+
+Si `enabled` esta en `false`, funciona en modo demo local. Si `enabled` esta en `true` y las credenciales son reales, el login usa Supabase Auth y la app sincroniza facturas nuevas con inventario y contabilidad.

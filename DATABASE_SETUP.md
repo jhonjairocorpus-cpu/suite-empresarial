@@ -27,7 +27,7 @@ Todas las tablas operativas usan `company_id`. Las politicas RLS limitan cada us
 
 ## Variables de conexion
 
-Copiar `cloud-config.example.js` como `cloud-config.js` cuando vayamos a conectar la app:
+Editar `cloud-config.js` cuando vayamos a conectar la app publicada:
 
 ```js
 window.QUANTROX_CLOUD = {
@@ -39,10 +39,39 @@ window.QUANTROX_CLOUD = {
 
 La `anon key` puede vivir en el navegador si las politicas RLS estan correctas. Nunca se debe publicar una `service_role key`.
 
+## Primer acceso cloud
+
+1. Crear una empresa en `companies`.
+2. Crear un usuario desde `Authentication`.
+3. Crear su fila en `profiles` usando el `id` del usuario y el `company_id`.
+4. Activar `enabled: true` en `cloud-config.js`.
+5. Publicar la app.
+6. Entrar con correo y clave desde la pantalla de login.
+
+Cuando Supabase esta activo, la app usa `signInWithPassword`, carga la empresa del perfil y sincroniza nuevas facturas con inventario y contabilidad.
+
+Ejemplo para crear empresa y perfil desde el SQL Editor, despues de crear el usuario en Authentication:
+
+```sql
+insert into public.companies (name, nit, city, email, plan)
+values ('Mi Empresa SAS', '900000000-1', 'Bogota', 'admin@miempresa.com', 'Suite Integral')
+returning id;
+
+insert into public.profiles (id, company_id, full_name, role, status)
+values (
+  'UUID_DEL_USUARIO_AUTH',
+  'UUID_DE_LA_EMPRESA',
+  'Administrador',
+  'Propietario',
+  'Activo'
+);
+```
+
+Despues de eso se pueden insertar productos, clientes y empleados iniciales con el mismo `company_id`.
+
 ## Siguiente implementacion
 
-1. Cargar `@supabase/supabase-js` en la PWA.
-2. Cambiar el login demo por `supabase.auth`.
-3. Leer `profiles.company_id` despues del login.
-4. Reemplazar `localStorage` por consultas a tablas.
-5. Mantener `localStorage` como cache offline.
+1. Crear vistas/reportes SQL para tablero gerencial.
+2. Agregar `customer_id` real en facturas desde el selector de clientes.
+3. Sincronizar POS, nomina y portal de clientes.
+4. Mantener `localStorage` como cache offline.
