@@ -410,8 +410,16 @@ h3 {
     #0b1220;
 }
 
+.accounting-hero {
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgba(12, 18, 28, 0.98), rgba(22, 163, 74, 0.84)),
+    #0b1220;
+}
+
 .app-hero p,
-.portal-hero p {
+.portal-hero p,
+.accounting-hero p {
   max-width: 720px;
   color: rgba(255, 255, 255, 0.75);
   line-height: 1.65;
@@ -455,6 +463,74 @@ h3 {
 
 .command-center strong {
   font-size: 2rem;
+}
+
+.accounting-kpis,
+.comparison-bars,
+.compare-row {
+  display: grid;
+  gap: 12px;
+}
+
+.accounting-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 22px;
+}
+
+.accounting-kpis span {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.accounting-kpis b {
+  font-size: 1.4rem;
+}
+
+.accounting-kpis small,
+.compare-row small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.comparison-bars {
+  align-self: stretch;
+  align-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.compare-row span {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 0.9rem;
+}
+
+.compare-track {
+  height: 11px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.compare-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #34d399, #7dd3fc);
+}
+
+.compare-row.danger .compare-track i {
+  background: linear-gradient(90deg, #f97316, #f43f5e);
+}
+
+.compare-row.soft .compare-track i {
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .mini-bars {
@@ -649,10 +725,16 @@ select:focus {
 .insight-list li,
 .receipt-row,
 .receipt-total {
+  display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid #edf1f6;
   padding: 10px 0;
+}
+
+.accounting-insights b {
+  text-align: right;
 }
 
 .receipt {
@@ -982,6 +1064,7 @@ select:focus {
   .hero-panel,
   .login-screen,
   .assistant-grid,
+  .accounting-kpis,
   .value-ladder {
     grid-template-columns: 1fr;
   }

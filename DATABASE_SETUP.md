@@ -22,7 +22,7 @@ Esta suite ya tiene una base preparada para Supabase/PostgreSQL. La app publicad
 - `invoices` e `invoice_items`: facturacion/POS.
 - `inventory_movements`: entradas, salidas y ajustes de inventario generados por facturas o compras.
 - `dian_events`: trazabilidad de envios, validaciones, rechazos y respuestas del proveedor DIAN.
-- `accounting_entries`: movimientos contables.
+- `accounting_entries`: movimientos contables con fecha y categoria para comparativos de ventas, gastos y utilidad.
 - `employees`: nomina.
 - `tasks`: tareas operativas.
 - `warehouses`: bodegas preparadas.

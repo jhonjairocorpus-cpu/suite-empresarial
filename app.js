@@ -73,10 +73,14 @@ const defaultData = {
     { date: "2026-05-23", type: "Entrada", product: "Impresora POS", quantity: 3, origin: "Compra proveedor" }
   ],
   accounting: [
-    { detail: "Ventas facturadas", account: "Ingresos", type: "Ingreso", amount: 3120000 },
-    { detail: "Compras de inventario", account: "Costo de venta", type: "Gasto", amount: 1260000 },
-    { detail: "Nomina quincenal", account: "Gasto laboral", type: "Gasto", amount: 1890000 },
-    { detail: "Servicio tecnico", account: "Ingresos", type: "Ingreso", amount: 540000 }
+    { detail: "Ventas facturadas", account: "Ingresos", category: "Ventas", type: "Ingreso", amount: 3120000, date: "2026-05-24" },
+    { detail: "Compras de inventario", account: "Costo de venta", category: "Inventario", type: "Gasto", amount: 1260000, date: "2026-05-22" },
+    { detail: "Nomina quincenal", account: "Gasto laboral", category: "Nomina", type: "Gasto", amount: 1890000, date: "2026-05-20" },
+    { detail: "Servicio tecnico", account: "Ingresos", category: "Servicios", type: "Ingreso", amount: 540000, date: "2026-05-18" },
+    { detail: "Ventas mes anterior", account: "Ingresos", category: "Ventas", type: "Ingreso", amount: 2840000, date: "2026-04-24" },
+    { detail: "Compras mes anterior", account: "Costo de venta", category: "Inventario", type: "Gasto", amount: 980000, date: "2026-04-22" },
+    { detail: "Nomina mes anterior", account: "Gasto laboral", category: "Nomina", type: "Gasto", amount: 1760000, date: "2026-04-20" },
+    { detail: "Arriendo y servicios", account: "Administracion", category: "Administracion", type: "Gasto", amount: 520000, date: "2026-05-16" }
   ],
   payroll: [
     { name: "Ana Martinez", role: "Administracion", salary: 2100000, status: "Activa" },
@@ -410,8 +414,10 @@ async function loadCloudData() {
       id: item.id,
       detail: item.detail,
       account: item.account,
+      category: item.category || item.account,
       type: item.type,
-      amount: Number(item.amount || 0)
+      amount: Number(item.amount || 0),
+      date: item.entry_date || item.created_at?.slice(0, 10) || getToday()
     }));
   }
 
@@ -488,14 +494,7 @@ async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountin
       origin: inventoryMovement.origin,
       movement_date: inventoryMovement.date
     }),
-    cloudClient.from("accounting_entries").insert({
-      company_id: data.company.id,
-      detail: accountingEntry.detail,
-      account: accountingEntry.account,
-      type: accountingEntry.type,
-      amount: accountingEntry.amount,
-      entry_date: invoice.date
-    })
+    insertAccountingEntryCloud(accountingEntry, invoice.date)
   ]);
 
   data.cloud.syncStatus = "Ultima factura sincronizada";
@@ -517,6 +516,43 @@ function markCloudPending(label, error) {
   data.cloud.pendingSync = Number(data.cloud.pendingSync || 0) + 1;
   data.cloud.syncStatus = `${label} pendiente`;
   cloudError = error?.message || cloudError;
+}
+
+async function syncAccountingEntryToCloud(entry) {
+  if (!canSyncCloud()) {
+    markCloudPending("Movimiento contable", { message: "Sin sesion cloud" });
+    return;
+  }
+
+  const { data: inserted, error } = await insertAccountingEntryCloud(entry, entry.date || getToday());
+
+  if (error) {
+    markCloudPending("Movimiento contable", error);
+    return;
+  }
+
+  entry.id = inserted?.id || entry.id;
+  markCloudSynced("Movimiento contable");
+}
+
+async function insertAccountingEntryCloud(entry, entryDate) {
+  const payload = {
+    company_id: data.company.id,
+    detail: entry.detail,
+    account: entry.account,
+    category: entry.category || entry.account,
+    type: entry.type,
+    amount: entry.amount,
+    entry_date: entryDate
+  };
+  const result = await cloudClient.from("accounting_entries").insert(payload).select("id").single();
+
+  if (!result.error || !String(result.error.message || "").includes("category")) {
+    return result;
+  }
+
+  const { category, ...legacyPayload } = payload;
+  return cloudClient.from("accounting_entries").insert(legacyPayload).select("id").single();
 }
 
 async function syncCompanyToCloud() {
@@ -713,6 +749,93 @@ function getTotals() {
     posTotal,
     posTax: Math.round(posTotal * 0.19),
     margin: income ? Math.round(((income - expense) / income) * 100) : 0
+  };
+}
+
+function getToday() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getEntryDate(entry, fallbackIndex = 0) {
+  if (entry.date) {
+    return entry.date;
+  }
+
+  const current = new Date();
+  current.setMonth(current.getMonth() - (fallbackIndex % 2));
+  current.setDate(Math.max(1, current.getDate() - fallbackIndex));
+  return current.toISOString().slice(0, 10);
+}
+
+function getMonthKey(dateValue) {
+  return String(dateValue || getToday()).slice(0, 7);
+}
+
+function getMonthLabel(monthKey) {
+  const [year, month] = String(monthKey).split("-").map(Number);
+  if (!year || !month) {
+    return "Periodo";
+  }
+
+  return new Intl.DateTimeFormat("es-CO", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+}
+
+function addMonths(monthKey, offset) {
+  const [year, month] = String(monthKey).split("-").map(Number);
+  const date = new Date(year || new Date().getFullYear(), (month || 1) - 1 + offset, 1);
+  return date.toISOString().slice(0, 7);
+}
+
+function getAccountingPeriods() {
+  const months = new Set(data.accounting.map((entry, index) => getMonthKey(getEntryDate(entry, index))));
+  const sorted = [...months].sort().reverse();
+  const current = sorted[0] || getToday().slice(0, 7);
+  const previous = sorted.find((month) => month < current) || addMonths(current, -1);
+  return { current, previous, months: sorted };
+}
+
+function summarizeAccounting(monthKey) {
+  const entries = data.accounting.filter((entry, index) => getMonthKey(getEntryDate(entry, index)) === monthKey);
+  const income = entries.filter((entry) => entry.type === "Ingreso").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const expense = entries.filter((entry) => entry.type === "Gasto").reduce((sum, entry) => sum + Number(entry.amount || 0), 0);
+  const result = income - expense;
+  const margin = income ? Math.round((result / income) * 100) : 0;
+  const expenseRatio = income ? Math.round((expense / income) * 100) : 0;
+  const categories = entries.reduce((acc, entry) => {
+    if (entry.type !== "Gasto") {
+      return acc;
+    }
+
+    const key = entry.category || entry.account || "Sin categoria";
+    acc[key] = (acc[key] || 0) + Number(entry.amount || 0);
+    return acc;
+  }, {});
+  const topExpense = Object.entries(categories).sort((a, b) => b[1] - a[1])[0] || ["Sin gasto", 0];
+
+  return { monthKey, entries, income, expense, result, margin, expenseRatio, categories, topExpense };
+}
+
+function percentChange(current, previous) {
+  if (!previous) {
+    return current ? 100 : 0;
+  }
+
+  return Math.round(((current - previous) / previous) * 100);
+}
+
+function getAccountingComparison() {
+  const periods = getAccountingPeriods();
+  const current = summarizeAccounting(periods.current);
+  const previous = summarizeAccounting(periods.previous);
+  return {
+    periods,
+    current,
+    previous,
+    changes: {
+      income: percentChange(current.income, previous.income),
+      expense: percentChange(current.expense, previous.expense),
+      result: percentChange(current.result, previous.result)
+    }
   };
 }
 
@@ -1506,37 +1629,118 @@ function renderInventory() {
 
 function renderAccounting() {
   const totals = getTotals();
+  const comparison = getAccountingComparison();
+  const maxCompare = Math.max(comparison.current.income, comparison.current.expense, comparison.previous.income, comparison.previous.expense, 1);
+  const resultTone = comparison.current.result < 0 ? "attention" : "";
+  const insightTone = comparison.current.margin >= 25 ? "good" : comparison.current.margin >= 10 ? "warn" : "danger";
+  const expenseCategories = Object.entries(comparison.current.categories)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
   return `
     <section class="summary-grid">
       ${metric("Ingresos", formatMoney(totals.income), "Movimientos positivos")}
       ${metric("Gastos", formatMoney(totals.expense), "Costos y egresos")}
       ${metric("Resultado", formatMoney(totals.balance), `${totals.margin}% margen`, totals.balance < 0 ? "attention" : "")}
+      ${metric("Periodo actual", getMonthLabel(comparison.current.monthKey), `${comparison.current.entries.length} movimientos`)}
+    </section>
+    <section class="hero-panel accounting-hero">
+      <div>
+        <p class="eyebrow">Comparativo contable</p>
+        <h2>${getMonthLabel(comparison.current.monthKey)} vs ${getMonthLabel(comparison.previous.monthKey)}</h2>
+        <p>Compara ventas, gastos y utilidad para saber si la empresa esta creciendo con rentabilidad o solo moviendo dinero.</p>
+        <div class="accounting-kpis">
+          <span><b>${comparison.changes.income}%</b><small>Variacion ventas</small></span>
+          <span><b>${comparison.changes.expense}%</b><small>Variacion gastos</small></span>
+          <span><b>${comparison.current.margin}%</b><small>Margen actual</small></span>
+        </div>
+      </div>
+      <div class="comparison-bars">
+        ${renderCompareBar("Ventas actual", comparison.current.income, maxCompare, "good")}
+        ${renderCompareBar("Ventas anterior", comparison.previous.income, maxCompare, "soft")}
+        ${renderCompareBar("Gastos actual", comparison.current.expense, maxCompare, "danger")}
+        ${renderCompareBar("Gastos anterior", comparison.previous.expense, maxCompare, "soft")}
+      </div>
+    </section>
+    <section class="summary-grid">
+      ${metric("Ventas del periodo", formatMoney(comparison.current.income), `${comparison.changes.income}% vs anterior`)}
+      ${metric("Gastos del periodo", formatMoney(comparison.current.expense), `${comparison.changes.expense}% vs anterior`, comparison.changes.expense > comparison.changes.income ? "attention" : "")}
+      ${metric("Utilidad", formatMoney(comparison.current.result), `${comparison.changes.result}% vs anterior`, resultTone)}
+      ${metric("Mayor gasto", formatMoney(comparison.current.topExpense[1]), comparison.current.topExpense[0], comparison.current.topExpense[1] > comparison.current.income * 0.35 ? "attention" : "")}
     </section>
     <section class="dashboard-grid">
       <article class="panel">
         <h3>Movimiento contable <span class="panel-label">Libro diario</span></h3>
         <form class="form-grid" id="accountingForm">
+          <label>Fecha <input name="date" required type="date" value="${getToday()}"></label>
           <label>Detalle <input name="detail" required placeholder="Detalle"></label>
           <label>Cuenta <input name="account" required placeholder="Cuenta"></label>
+          <label>Categoria <select name="category">
+            <option>Ventas</option>
+            <option>Servicios</option>
+            <option>Inventario</option>
+            <option>Nomina</option>
+            <option>Administracion</option>
+            <option>Marketing</option>
+            <option>Impuestos</option>
+            <option>Financiero</option>
+          </select></label>
           <label>Tipo <select name="type"><option>Ingreso</option><option>Gasto</option></select></label>
           <label>Monto <input name="amount" required min="0" type="number" placeholder="0"></label>
-          <button class="primary-button span-2" type="submit">Registrar</button>
+          <button class="primary-button span-2" type="submit">Registrar movimiento</button>
         </form>
       </article>
       <article class="panel">
-        <h3>Lectura financiera <span class="panel-label">AI ready</span></h3>
+        <h3>Lectura financiera <span class="panel-label">${insightTone}</span></h3>
         <div class="progress-stack">
-          <div class="progress-item"><span><b>Margen</b><b>${totals.margin}%</b></span><div class="progress-track"><i style="width:${Math.max(0, Math.min(100, totals.margin))}%"></i></div></div>
-          <div class="progress-item"><span><b>Gasto / ingreso</b><b>${totals.income ? Math.round((totals.expense / totals.income) * 100) : 0}%</b></span><div class="progress-track"><i style="width:${totals.income ? Math.min(100, Math.round((totals.expense / totals.income) * 100)) : 0}%"></i></div></div>
+          <div class="progress-item"><span><b>Margen periodo</b><b>${comparison.current.margin}%</b></span><div class="progress-track"><i style="width:${Math.max(0, Math.min(100, comparison.current.margin))}%"></i></div></div>
+          <div class="progress-item"><span><b>Gasto / ventas</b><b>${comparison.current.expenseRatio}%</b></span><div class="progress-track"><i style="width:${Math.min(100, comparison.current.expenseRatio)}%"></i></div></div>
         </div>
+        <ul class="insight-list accounting-insights">
+          <li><span>Diagnostico</span><b>${comparison.current.margin >= 20 ? "Rentable" : comparison.current.result > 0 ? "Ajustar margen" : "Perdida operativa"}</b></li>
+          <li><span>Prioridad</span><b>${comparison.changes.expense > comparison.changes.income ? "Controlar gastos" : "Escalar ventas"}</b></li>
+          <li><span>Punto de equilibrio</span><b>${formatMoney(comparison.current.expense)}</b></li>
+        </ul>
       </article>
     </section>
-    ${renderTable("Movimientos", ["Detalle", "Cuenta", "Tipo", "Monto"], data.accounting.map((item) => [
+    <section class="dashboard-grid wide-left">
+      <article class="panel">
+        <h3>Gastos por categoria <span class="panel-label">Periodo actual</span></h3>
+        <div class="progress-stack">
+          ${expenseCategories.length ? expenseCategories.map(([category, amount]) => `
+            <div class="progress-item">
+              <span><b>${escapeHtml(category)}</b><b>${formatMoney(amount)}</b></span>
+              <div class="progress-track"><i style="width:${comparison.current.expense ? Math.round((amount / comparison.current.expense) * 100) : 0}%"></i></div>
+            </div>
+          `).join("") : "<p>No hay gastos registrados en este periodo.</p>"}
+        </div>
+      </article>
+      <article class="panel">
+        <h3>Acciones sugeridas <span class="panel-label">Gerencia</span></h3>
+        <ul class="insight-list">
+          <li><span>Si gastos suben mas que ventas</span><b>revisar compras y nomina</b></li>
+          <li><span>Si margen baja de 20%</span><b>subir precios o reducir costos</b></li>
+          <li><span>Si ventas crecen con margen</span><b>invertir en el canal ganador</b></li>
+        </ul>
+      </article>
+    </section>
+    ${renderTable("Movimientos", ["Fecha", "Detalle", "Categoria", "Cuenta", "Tipo", "Monto"], data.accounting.map((item, index) => [
+      getEntryDate(item, index),
       item.detail,
+      item.category || item.account,
       item.account,
       badge(item.type, item.type === "Ingreso" ? "good" : "danger"),
       formatMoney(item.amount)
     ]))}
+  `;
+}
+
+function renderCompareBar(label, amount, max, tone) {
+  return `
+    <div class="compare-row ${tone}">
+      <span><b>${escapeHtml(label)}</b><small>${formatMoney(amount)}</small></span>
+      <div class="compare-track"><i style="width:${Math.max(4, Math.round((amount / max) * 100))}%"></i></div>
+    </div>
   `;
 }
 
@@ -2094,8 +2298,10 @@ function bindModuleEvents() {
       const accountingEntry = {
         detail: `Venta ${invoiceNumber} - ${product.name}`,
         account: "Ingresos",
+        category: "Ventas",
         type: "Ingreso",
-        amount: subtotal
+        amount: subtotal,
+        date: invoice.date
       };
 
       data.invoices.unshift(invoice);
@@ -2141,14 +2347,18 @@ function bindModuleEvents() {
       data.inventory.unshift(product);
       await syncProductToCloud(product);
     },
-    accountingForm(event) {
+    async accountingForm(event) {
       const form = new FormData(event.currentTarget);
-      data.accounting.unshift({
+      const entry = {
+        date: String(form.get("date") || getToday()),
         detail: String(form.get("detail")).trim(),
         account: String(form.get("account")).trim(),
+        category: String(form.get("category") || form.get("account")).trim(),
         type: String(form.get("type")),
         amount: Number(form.get("amount"))
-      });
+      };
+      data.accounting.unshift(entry);
+      await syncAccountingEntryToCloud(entry);
     },
     payrollForm(event) {
       const form = new FormData(event.currentTarget);

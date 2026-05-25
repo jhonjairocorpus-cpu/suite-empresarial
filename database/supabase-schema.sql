@@ -130,6 +130,7 @@ create table if not exists public.accounting_entries (
   company_id uuid not null references public.companies(id) on delete cascade,
   detail text not null,
   account text not null,
+  category text not null default 'General',
   type text not null check (type in ('Ingreso', 'Gasto')),
   amount numeric(14,2) not null,
   entry_date date not null default current_date,
@@ -153,6 +154,9 @@ create table if not exists public.tasks (
   done boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table public.accounting_entries
+add column if not exists category text not null default 'General';
 
 create index if not exists idx_profiles_company_id on public.profiles(company_id);
 create index if not exists idx_customers_company_id on public.customers(company_id);

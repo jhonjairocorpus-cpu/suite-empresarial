@@ -1,9 +1,9 @@
-const CACHE_NAME = "suite-empresarial-v18";
+const CACHE_NAME = "suite-empresarial-v19";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=18",
-  "./app.js?v=18",
+  "./styles.css?v=19",
+  "./app.js?v=19",
   "./cloud-config.js?v=18",
   "./manifest.webmanifest?v=18",
   "./assets/icon-192.png",
