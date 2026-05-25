@@ -1,4 +1,4 @@
-const STORAGE_KEY = "quantrox-suite-data-v5";
+const STORAGE_KEY = "quantrox-suite-data-v6";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -79,6 +79,24 @@ const defaultData = {
     { title: "Cobro inteligente", area: "Cartera", impact: "Mejora flujo de caja", enabled: true },
     { title: "Compra sugerida", area: "Inventario", impact: "Evita quiebres de stock", enabled: true },
     { title: "Cierre diario", area: "POS", impact: "Reduce errores de caja", enabled: false }
+  ],
+  advantages: [
+    { title: "Asistente operativo", category: "IA", value: "Recomendaciones accionables por cartera, stock, margen y nomina.", status: "Activo" },
+    { title: "Portal de cliente", category: "Experiencia", value: "Facturas, pagos, historial y soporte desde un enlace compartible.", status: "Disenado" },
+    { title: "Cumplimiento proactivo", category: "DIAN", value: "Checklist de facturacion electronica, POS electronico, nomina y documentos soporte.", status: "Listo" },
+    { title: "Integraciones abiertas", category: "API", value: "Preparado para pagos, WhatsApp, e-commerce, bancos y proveedores autorizados.", status: "Listo" }
+  ],
+  compliance: [
+    { item: "Facturacion electronica", owner: "Ventas", status: "Preparado" },
+    { item: "POS electronico", owner: "Caja", status: "Preparado" },
+    { item: "Nomina electronica", owner: "Talento", status: "Pendiente API" },
+    { item: "Documento soporte", owner: "Compras", status: "Pendiente API" }
+  ],
+  integrations: [
+    { name: "WhatsApp", use: "Cobros, soporte y envio de reportes", status: "Activo" },
+    { name: "Pasarela de pagos", use: "Pagos de facturas y links de cobro", status: "Planeado" },
+    { name: "Proveedor DIAN", use: "CUFE, XML, QR y validacion", status: "Planeado" },
+    { name: "E-commerce", use: "Ventas online sincronizadas", status: "Planeado" }
   ]
 };
 
@@ -92,6 +110,7 @@ const moduleMeta = {
   customers: { title: "Clientes", eyebrow: "CRM comercial" },
   reports: { title: "Reportes", eyebrow: "Indicadores" },
   assistant: { title: "Asistente empresarial", eyebrow: "Acciones inteligentes" },
+  growth: { title: "Ventajas Quantrox", eyebrow: "Diferenciadores" },
   settings: { title: "Configuracion", eyebrow: "Empresa y sistema" }
 };
 
@@ -105,6 +124,7 @@ const navItems = [
   ["customers", "Clientes", "R"],
   ["reports", "Reportes", "B"],
   ["assistant", "Asistente", "A"],
+  ["growth", "Ventajas", "Q"],
   ["settings", "Ajustes", "S"]
 ];
 
@@ -301,6 +321,7 @@ function renderActiveModule() {
     customers: renderCustomers,
     reports: renderReports,
     assistant: renderAssistant,
+    growth: renderGrowth,
     settings: renderSettings
   };
 
@@ -682,6 +703,86 @@ function renderAssistant() {
   `;
 }
 
+function renderGrowth() {
+  const totals = getTotals();
+  const activeAdvantages = data.advantages.filter((item) => item.status === "Activo" || item.status === "Listo").length;
+  const readyCompliance = data.compliance.filter((item) => item.status === "Preparado").length;
+  const readyIntegrations = data.integrations.filter((item) => item.status === "Activo").length;
+
+  return `
+    <section class="hero-panel app-hero">
+      <div>
+        <p class="eyebrow">Estrategia producto</p>
+        <h2 class="balanced-title">Una suite que anticipa, recomienda y automatiza.</h2>
+        <p>La apuesta de Quantrox es combinar operacion, cumplimiento, datos en nube, portal del cliente e inteligencia accionable en una sola experiencia.</p>
+        <div class="hero-actions">
+          <button class="primary-button" type="button" data-nav="assistant">Abrir asistente</button>
+          <button class="secondary-button" type="button" data-nav="settings">Preparar cloud</button>
+        </div>
+      </div>
+      <div class="command-center">
+        <span>Diferenciadores activos</span>
+        <strong>${activeAdvantages}/${data.advantages.length}</strong>
+        <div class="progress-track"><i style="width:${Math.round((activeAdvantages / data.advantages.length) * 100)}%"></i></div>
+        <small>Meta: suite inteligente, modular y multiempresa</small>
+      </div>
+    </section>
+
+    <section class="summary-grid">
+      ${metric("Cumplimiento", `${readyCompliance}/${data.compliance.length}`, "Flujos preparados")}
+      ${metric("Integraciones", `${readyIntegrations}/${data.integrations.length}`, "Conectores activos")}
+      ${metric("Automatizaciones", data.playbooks.length, "Playbooks operativos")}
+      ${metric("Valor medido", formatMoney(totals.pending + totals.inventoryValue), "Cartera + inventario")}
+    </section>
+
+    <section class="assistant-grid">
+      ${data.advantages.map((item) => `
+        <article class="assistant-card ${item.status === "Activo" ? "good" : ""}">
+          <span class="panel-label">${escapeHtml(item.category)}</span>
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.value)}</p>
+          ${badge(item.status, item.status === "Activo" ? "good" : "info")}
+        </article>
+      `).join("")}
+    </section>
+
+    <section class="dashboard-grid">
+      ${renderMiniTable("Checklist de cumplimiento", ["Flujo", "Responsable", "Estado"], data.compliance.map((item) => [
+        item.item,
+        item.owner,
+        badge(item.status, item.status === "Preparado" ? "good" : "warn")
+      ]))}
+      ${renderMiniTable("Mapa de integraciones", ["Canal", "Uso", "Estado"], data.integrations.map((item) => [
+        item.name,
+        item.use,
+        badge(item.status, item.status === "Activo" ? "good" : "info")
+      ]))}
+    </section>
+
+    <section class="panel">
+      <h3>Promesa comercial <span class="panel-label">Para clientes</span></h3>
+      <div class="value-ladder">
+        <span><b>1. Operar</b><small>Facturacion, POS, inventario, contabilidad, nomina y clientes.</small></span>
+        <span><b>2. Controlar</b><small>Roles, datos en nube, auditoria y reportes por empresa.</small></span>
+        <span><b>3. Anticipar</b><small>Asistente, alertas, tareas y recomendaciones antes del problema.</small></span>
+        <span><b>4. Automatizar</b><small>Pagos, DIAN, WhatsApp, e-commerce y playbooks inteligentes.</small></span>
+      </div>
+    </section>
+  `;
+}
+
+function renderMiniTable(title, headers, rows) {
+  return `
+    <article class="panel table-panel">
+      <h3>${escapeHtml(title)} <span class="panel-label">${rows.length} items</span></h3>
+      <div class="table mini-table" style="--cols:${headers.length}">
+        <div class="table-row header">${headers.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>
+        ${rows.map((row) => `<div class="table-row">${row.map((item) => `<span>${item}</span>`).join("")}</div>`).join("")}
+      </div>
+    </article>
+  `;
+}
+
 function renderSettings() {
   return `
     <section class="summary-grid">
@@ -960,7 +1061,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=6").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=7").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });
