@@ -196,6 +196,24 @@ alter table public.employees enable row level security;
 alter table public.tasks enable row level security;
 alter table public.activity_logs enable row level security;
 
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on
+  public.companies,
+  public.profiles,
+  public.customers,
+  public.products,
+  public.invoices,
+  public.invoice_items,
+  public.inventory_movements,
+  public.dian_events,
+  public.warehouses,
+  public.price_lists,
+  public.accounting_entries,
+  public.employees,
+  public.tasks,
+  public.activity_logs
+to authenticated;
+
 create or replace function public.current_company_id()
 returns uuid
 language sql
@@ -205,6 +223,8 @@ set search_path = public
 as $$
   select company_id from public.profiles where id = auth.uid()
 $$;
+
+grant execute on function public.current_company_id() to authenticated;
 
 create policy "profiles_read_own_company"
 on public.profiles for select
