@@ -1,4 +1,4 @@
-const STORAGE_KEY = "quantrox-suite-data-v3";
+const STORAGE_KEY = "quantrox-suite-data-v4";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -15,6 +15,17 @@ const defaultData = {
     city: "Bogota",
     email: "admin@empresa.com"
   },
+  cloud: {
+    mode: "Demo local",
+    database: "Supabase/PostgreSQL",
+    syncStatus: "Pendiente de conexion",
+    lastBackup: "Sin respaldo cloud"
+  },
+  users: [
+    { name: "Administrador", email: "admin@empresa.com", role: "Propietario", status: "Activo" },
+    { name: "Caja principal", email: "caja@empresa.com", role: "Cajero", status: "Invitado" },
+    { name: "Contabilidad", email: "contabilidad@empresa.com", role: "Contador", status: "Invitado" }
+  ],
   invoices: [
     { id: "FE-1048", customer: "Drogueria Central", status: "Pagada", date: "2026-05-24", subtotal: 1280000, tax: 243200 },
     { id: "FE-1047", customer: "Mercado La 80", status: "Pendiente", date: "2026-05-23", subtotal: 760000, tax: 144400 },
@@ -551,6 +562,12 @@ function renderReports() {
 
 function renderSettings() {
   return `
+    <section class="summary-grid">
+      ${metric("Modo de datos", data.cloud.mode, "Operando en este dispositivo")}
+      ${metric("Usuarios", data.users.length, "Roles preparados")}
+      ${metric("Base recomendada", "Supabase", "PostgreSQL multiempresa")}
+      ${metric("Respaldo", "Pendiente", data.cloud.lastBackup, "attention")}
+    </section>
     <section class="dashboard-grid">
       <article class="panel">
         <h3>Empresa <span class="panel-label">Perfil</span></h3>
@@ -565,13 +582,47 @@ function renderSettings() {
       <article class="panel">
         <h3>Base de datos <span class="panel-label">Produccion</span></h3>
         <ul class="insight-list">
-          <li><span>Frontend</span><b>PWA instalada</b></li>
-          <li><span>Backend recomendado</span><b>Supabase/PostgreSQL</b></li>
-          <li><span>Facturacion electronica</span><b>API autorizada</b></li>
+          <li><span>Estado actual</span><b>${escapeHtml(data.cloud.syncStatus)}</b></li>
+          <li><span>Backend recomendado</span><b>${escapeHtml(data.cloud.database)}</b></li>
+          <li><span>Seguridad</span><b>RLS por empresa</b></li>
           <li><span>Modelo</span><b>Multiempresa por tenant</b></li>
         </ul>
       </article>
     </section>
+    <section class="dashboard-grid">
+      <article class="panel">
+        <h3>Usuarios y roles <span class="panel-label">Accesos</span></h3>
+        <form class="form-grid" id="userForm">
+          <label>Nombre <input name="name" required placeholder="Nombre"></label>
+          <label>Correo <input name="email" required type="email" placeholder="usuario@empresa.com"></label>
+          <label>Rol
+            <select name="role">
+              <option>Administrador</option>
+              <option>Contador</option>
+              <option>Cajero</option>
+              <option>Inventario</option>
+              <option>Gerencia</option>
+            </select>
+          </label>
+          <button class="primary-button" type="submit">Agregar usuario</button>
+        </form>
+      </article>
+      <article class="panel">
+        <h3>Ruta a produccion <span class="panel-label">Siguiente</span></h3>
+        <div class="timeline">
+          <span><b>1. Crear Supabase</b><small>Proyecto, region y claves anonimas publicas.</small></span>
+          <span><b>2. Ejecutar SQL</b><small>Tablas, indices y politicas por empresa.</small></span>
+          <span><b>3. Conectar autenticacion</b><small>Usuarios reales con roles y permisos.</small></span>
+          <span><b>4. Activar facturacion</b><small>Proveedor autorizado por API para DIAN.</small></span>
+        </div>
+      </article>
+    </section>
+    ${renderTable("Accesos preparados", ["Nombre", "Correo", "Rol", "Estado"], data.users.map((item) => [
+      item.name,
+      item.email,
+      item.role,
+      badge(item.status, item.status === "Activo" ? "good" : "warn")
+    ]))}
   `;
 }
 
@@ -669,6 +720,15 @@ function bindModuleEvents() {
       data.company.nit = String(form.get("nit")).trim();
       data.company.city = String(form.get("city")).trim();
       data.company.email = String(form.get("email")).trim();
+    },
+    userForm(event) {
+      const form = new FormData(event.currentTarget);
+      data.users.push({
+        name: String(form.get("name")).trim(),
+        email: String(form.get("email")).trim(),
+        role: String(form.get("role")),
+        status: "Invitado"
+      });
     }
   };
 
@@ -753,7 +813,7 @@ window.addEventListener("appinstalled", () => {
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js?v=4").catch((error) => {
+    navigator.serviceWorker.register("sw.js?v=5").catch((error) => {
       console.warn("No se pudo activar el modo offline.", error);
     });
   });

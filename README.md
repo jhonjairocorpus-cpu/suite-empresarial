@@ -74,3 +74,9 @@ El prototipo guarda informacion en el dispositivo con `localStorage`. Para uso m
 2. API backend para reglas de negocio, permisos y auditoria.
 3. Integracion con proveedor autorizado de facturacion electronica.
 4. Backups automaticos y ambientes separados para demo, pruebas y produccion.
+
+## Base de datos
+
+La estructura inicial de produccion esta en `database/supabase-schema.sql`.
+
+Ver el paso a paso en `DATABASE_SETUP.md`.
