@@ -41,14 +41,22 @@ on conflict (company_id, sku) do update set
   cost = excluded.cost,
   price = excluded.price;
 
-insert into public.customers (company_id, name, channel, contact_email, balance)
-select c.id, item.name, item.channel, item.contact_email, item.balance
+insert into public.customers (company_id, name, nit, channel, contact_name, contact_email, phone, city, address, balance, notes)
+select c.id, item.name, item.nit, item.channel, item.contact_name, item.contact_email, item.phone, item.city, item.address, item.balance, item.notes
 from (select id from public.companies where nit = '901.235.884-1') c,
 jsonb_to_recordset('[
-  {"name":"Drogueria Central","channel":"Mayorista","contact_email":"compras@central.com","balance":0},
-  {"name":"Mercado La 80","channel":"Retail","contact_email":"admin@la80.com","balance":904400},
-  {"name":"Cafe Norte","channel":"Servicios","contact_email":"gerencia@cafenorte.com","balance":0}
-]'::jsonb) as item(name text, channel text, contact_email text, balance numeric);
+  {"name":"Drogueria Central","nit":"900.123.456-7","channel":"Mayorista","contact_name":"Area de compras","contact_email":"compras@central.com","phone":"3104567890","city":"Cali","address":"Calle 12 # 8-45","balance":0,"notes":"Cliente recurrente de contado"},
+  {"name":"Mercado La 80","nit":"901.456.789-0","channel":"Retail","contact_name":"Administracion","contact_email":"admin@la80.com","phone":"3007894561","city":"Bogota","address":"Carrera 80 # 24-10","balance":904400,"notes":"Tiene cartera pendiente"},
+  {"name":"Cafe Norte","nit":"1.144.555.332-1","channel":"Servicios","contact_name":"Gerencia","contact_email":"gerencia@cafenorte.com","phone":"3185557788","city":"Medellin","address":"Avenida Norte # 15-20","balance":0,"notes":"Prefiere contacto por correo"}
+]'::jsonb) as item(name text, nit text, channel text, contact_name text, contact_email text, phone text, city text, address text, balance numeric, notes text);
+
+insert into public.suppliers (company_id, name, nit, category, contact_name, email, phone, city, address, payment_terms, status, notes)
+select c.id, item.name, item.nit, item.category, item.contact_name, item.email, item.phone, item.city, item.address, item.payment_terms, item.status, item.notes
+from (select id from public.companies where nit = '901.235.884-1') c,
+jsonb_to_recordset('[
+  {"name":"Distribuciones Tecnicas SAS","nit":"901.777.224-5","category":"Inventario","contact_name":"Laura Gomez","email":"compras@ditec.com","phone":"3157788990","city":"Bogota","address":"Zona industrial","payment_terms":"30 dias","status":"Activo","notes":"Proveedor principal de equipos POS"},
+  {"name":"Servicios Cloud Andinos","nit":"900.888.112-3","category":"Tecnologia","contact_name":"Soporte comercial","email":"ventas@cloudandinos.com","phone":"3012223344","city":"Cali","address":"Remoto","payment_terms":"Contado","status":"Activo","notes":"Hosting, dominios y soporte tecnico"}
+]'::jsonb) as item(name text, nit text, category text, contact_name text, email text, phone text, city text, address text, payment_terms text, status text, notes text);
 
 insert into public.tasks (company_id, text, done)
 select c.id, item.text, item.done

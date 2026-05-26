@@ -93,9 +93,13 @@ const defaultData = {
     { name: "Mateo Rios", role: "Soporte", salary: 2250000, status: "Activa" }
   ],
   customers: [
-    { name: "Drogueria Central", channel: "Mayorista", balance: 0, contact: "compras@central.com" },
-    { name: "Mercado La 80", channel: "Retail", balance: 904400, contact: "admin@la80.com" },
-    { name: "Cafe Norte", channel: "Servicios", balance: 0, contact: "gerencia@cafenorte.com" }
+    { name: "Drogueria Central", nit: "900.123.456-7", channel: "Mayorista", contactName: "Area de compras", contact: "compras@central.com", phone: "3104567890", city: "Cali", address: "Calle 12 # 8-45", balance: 0, notes: "Cliente recurrente de contado" },
+    { name: "Mercado La 80", nit: "901.456.789-0", channel: "Retail", contactName: "Administracion", contact: "admin@la80.com", phone: "3007894561", city: "Bogota", address: "Carrera 80 # 24-10", balance: 904400, notes: "Tiene cartera pendiente" },
+    { name: "Cafe Norte", nit: "1.144.555.332-1", channel: "Servicios", contactName: "Gerencia", contact: "gerencia@cafenorte.com", phone: "3185557788", city: "Medellin", address: "Avenida Norte # 15-20", balance: 0, notes: "Prefiere contacto por correo" }
+  ],
+  suppliers: [
+    { name: "Distribuciones Tecnicas SAS", nit: "901.777.224-5", category: "Inventario", contactName: "Laura Gomez", email: "compras@ditec.com", phone: "3157788990", city: "Bogota", address: "Zona industrial", paymentTerms: "30 dias", status: "Activo", notes: "Proveedor principal de equipos POS" },
+    { name: "Servicios Cloud Andinos", nit: "900.888.112-3", category: "Tecnologia", contactName: "Soporte comercial", email: "ventas@cloudandinos.com", phone: "3012223344", city: "Cali", address: "Remoto", paymentTerms: "Contado", status: "Activo", notes: "Hosting, dominios y soporte tecnico" }
   ],
   tasks: [
     { text: "Revisar cartera pendiente", done: false },
@@ -170,6 +174,7 @@ const moduleMeta = {
   accounting: { title: "Contabilidad", eyebrow: "Balance y estados" },
   payroll: { title: "Nomina", eyebrow: "Equipo y provisiones" },
   customers: { title: "Clientes", eyebrow: "CRM comercial" },
+  suppliers: { title: "Proveedores", eyebrow: "Compras y terceros" },
   reports: { title: "Reportes", eyebrow: "Indicadores" },
   assistant: { title: "Asistente empresarial", eyebrow: "Acciones inteligentes" },
   growth: { title: "Ventajas Quantrox", eyebrow: "Diferenciadores" },
@@ -187,6 +192,7 @@ const navItems = [
   ["accounting", "Contabilidad", "C"],
   ["payroll", "Nomina", "N"],
   ["customers", "Clientes", "R"],
+  ["suppliers", "Proveedores", "V"],
   ["reports", "Reportes", "B"],
   ["assistant", "Asistente", "A"],
   ["growth", "Ventajas", "Q"],
@@ -337,6 +343,7 @@ async function loadCloudData() {
   const [
     companyResult,
     customersResult,
+    suppliersResult,
     productsResult,
     invoicesResult,
     accountingResult,
@@ -348,6 +355,7 @@ async function loadCloudData() {
   ] = await Promise.all([
     cloudClient.from("companies").select("*").eq("id", companyId).single(),
     cloudClient.from("customers").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("suppliers").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("products").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("invoices").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("accounting_entries").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -383,9 +391,30 @@ async function loadCloudData() {
   data.customers = (customersResult.data || []).map((item) => ({
     id: item.id,
     name: item.name,
+    nit: item.nit || "",
     channel: item.channel,
     balance: Number(item.balance || 0),
-    contact: item.contact_email || ""
+    contactName: item.contact_name || "",
+    contact: item.contact_email || "",
+    phone: item.phone || "",
+    city: item.city || "",
+    address: item.address || "",
+    notes: item.notes || ""
+  }));
+
+  data.suppliers = (suppliersResult.data || []).map((item) => ({
+    id: item.id,
+    name: item.name,
+    nit: item.nit || "",
+    category: item.category || "General",
+    contactName: item.contact_name || "",
+    email: item.email || "",
+    phone: item.phone || "",
+    city: item.city || "",
+    address: item.address || "",
+    paymentTerms: item.payment_terms || "",
+    status: item.status || "Activo",
+    notes: item.notes || ""
   }));
 
   data.inventory = (productsResult.data || []).map((item) => ({
@@ -657,8 +686,14 @@ async function syncCustomerToCloud(customer) {
   const payload = {
     company_id: data.company.id,
     name: customer.name,
+    nit: customer.nit,
     channel: customer.channel,
+    contact_name: customer.contactName,
     contact_email: customer.contact,
+    phone: customer.phone,
+    city: customer.city,
+    address: customer.address,
+    notes: customer.notes,
     balance: customer.balance
   };
   const { error } = await cloudClient.from("customers").insert(payload);
@@ -669,6 +704,35 @@ async function syncCustomerToCloud(customer) {
   }
 
   markCloudSynced("Cliente");
+}
+
+async function syncSupplierToCloud(supplier) {
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  const payload = {
+    company_id: data.company.id,
+    name: supplier.name,
+    nit: supplier.nit,
+    category: supplier.category,
+    contact_name: supplier.contactName,
+    email: supplier.email,
+    phone: supplier.phone,
+    city: supplier.city,
+    address: supplier.address,
+    payment_terms: supplier.paymentTerms,
+    status: supplier.status,
+    notes: supplier.notes
+  };
+  const { error } = await cloudClient.from("suppliers").insert(payload);
+
+  if (error) {
+    markCloudPending("Proveedor", error);
+    return;
+  }
+
+  markCloudSynced("Proveedor");
 }
 
 async function syncTaskToCloud(task) {
@@ -750,6 +814,7 @@ async function clearCompanyOperationalData() {
     "accounting_entries",
     "tasks",
     "employees",
+    "suppliers",
     "customers",
     "products"
   ];
@@ -782,6 +847,7 @@ async function clearCompanyOperationalData() {
   }
 
   data.customers = [];
+  data.suppliers = [];
   data.inventory = [];
   data.invoices = [];
   data.accounting = [];
@@ -1322,6 +1388,7 @@ function renderActiveModule() {
     accounting: renderAccounting,
     payroll: renderPayroll,
     customers: renderCustomers,
+    suppliers: renderSuppliers,
     reports: renderReports,
     assistant: renderAssistant,
     growth: renderGrowth,
@@ -2006,26 +2073,79 @@ function renderPayroll() {
 }
 
 function renderCustomers() {
+  const customers = data.customers || [];
   return `
     <section class="summary-grid">
-      ${metric("Clientes", data.customers.length, "Cuentas activas")}
-      ${metric("Cartera", formatMoney(data.customers.reduce((sum, item) => sum + item.balance, 0)), "Por cobrar")}
-      ${metric("Canales", new Set(data.customers.map((item) => item.channel)).size, "Segmentos")}
+      ${metric("Clientes", customers.length, "Cuentas activas")}
+      ${metric("Cartera", formatMoney(customers.reduce((sum, item) => sum + item.balance, 0)), "Por cobrar")}
+      ${metric("NIT registrados", customers.filter((item) => item.nit).length, "Datos fiscales")}
     </section>
     <section class="panel">
-      <h3>Nuevo cliente <span class="panel-label">CRM</span></h3>
+      <h3>Nuevo cliente <span class="panel-label">Datos completos</span></h3>
       <form class="form-grid" id="customerForm">
-        <label>Nombre <input name="name" required placeholder="Cliente"></label>
+        <label>Razon social / Nombre <input name="name" required placeholder="Cliente"></label>
+        <label>NIT / Documento <input name="nit" required placeholder="901.000.000-0"></label>
         <label>Canal <input name="channel" required placeholder="Retail, mayorista..."></label>
+        <label>Contacto <input name="contactName" placeholder="Persona encargada"></label>
         <label>Correo <input name="contact" required type="email" placeholder="correo@empresa.com"></label>
+        <label>Telefono <input name="phone" required placeholder="3001234567"></label>
+        <label>Ciudad <input name="city" placeholder="Ciudad"></label>
+        <label>Direccion <input name="address" placeholder="Direccion comercial"></label>
+        <label>Notas <textarea name="notes" rows="3" placeholder="Condiciones, preferencias o informacion adicional"></textarea></label>
         <button class="primary-button" type="submit">Guardar cliente</button>
       </form>
     </section>
-    ${renderTable("Clientes activos", ["Nombre", "Canal", "Cartera", "Contacto"], data.customers.map((item) => [
+    ${renderTable("Clientes activos", ["Cliente", "NIT", "Canal", "Contacto", "Telefono", "Ciudad", "Cartera"], customers.map((item) => [
       item.name,
+      item.nit || "Pendiente",
       item.channel,
-      formatMoney(item.balance),
-      item.contact
+      item.contact ? `${item.contactName ? `${item.contactName} - ` : ""}${item.contact}` : "Pendiente",
+      item.phone || "Pendiente",
+      item.city || "Pendiente",
+      formatMoney(item.balance)
+    ]))}
+  `;
+}
+
+function renderSuppliers() {
+  const suppliers = data.suppliers || [];
+  return `
+    <section class="summary-grid">
+      ${metric("Proveedores", suppliers.length, "Terceros activos")}
+      ${metric("Categorias", new Set(suppliers.map((item) => item.category)).size, "Tipos de compra")}
+      ${metric("Con NIT", suppliers.filter((item) => item.nit).length, "Identificados")}
+    </section>
+    <section class="panel">
+      <h3>Nuevo proveedor <span class="panel-label">Compras</span></h3>
+      <form class="form-grid" id="supplierForm">
+        <label>Razon social <input name="name" required placeholder="Proveedor"></label>
+        <label>NIT / Documento <input name="nit" required placeholder="900.000.000-0"></label>
+        <label>Categoria <input name="category" required placeholder="Inventario, tecnologia, servicios..."></label>
+        <label>Contacto <input name="contactName" placeholder="Persona encargada"></label>
+        <label>Correo <input name="email" required type="email" placeholder="proveedor@empresa.com"></label>
+        <label>Telefono <input name="phone" required placeholder="3001234567"></label>
+        <label>Ciudad <input name="city" placeholder="Ciudad"></label>
+        <label>Direccion <input name="address" placeholder="Direccion"></label>
+        <label>Condiciones de pago <input name="paymentTerms" placeholder="Contado, 15 dias, 30 dias..."></label>
+        <label>Estado
+          <select name="status">
+            <option>Activo</option>
+            <option>En revision</option>
+            <option>Inactivo</option>
+          </select>
+        </label>
+        <label>Notas <textarea name="notes" rows="3" placeholder="Productos, acuerdos, documentos pendientes"></textarea></label>
+        <button class="primary-button" type="submit">Guardar proveedor</button>
+      </form>
+    </section>
+    ${renderTable("Proveedores registrados", ["Proveedor", "NIT", "Categoria", "Contacto", "Telefono", "Pago", "Estado"], suppliers.map((item) => [
+      item.name,
+      item.nit || "Pendiente",
+      item.category || "General",
+      item.email ? `${item.contactName ? `${item.contactName} - ` : ""}${item.email}` : "Pendiente",
+      item.phone || "Pendiente",
+      item.paymentTerms || "Sin definir",
+      badge(item.status || "Activo")
     ]))}
   `;
 }
@@ -2422,7 +2542,7 @@ function renderSettings() {
       <section class="panel danger-zone">
         <div>
           <h3>Limpieza de empresa <span class="panel-label">Administrador</span></h3>
-          <p>Elimina productos, clientes, facturas, movimientos, contabilidad, nomina, tareas e historial operativo de esta empresa. No elimina la empresa ni el usuario.</p>
+          <p>Elimina productos, clientes, proveedores, facturas, movimientos, contabilidad, nomina, tareas e historial operativo de esta empresa. No elimina la empresa ni el usuario.</p>
         </div>
         <form class="form-grid" id="clearCompanyForm">
           <label>Confirmacion <input name="confirm" required placeholder="Escribe LIMPIAR"></label>
@@ -2634,13 +2754,39 @@ function bindModuleEvents() {
       const form = new FormData(event.currentTarget);
       const customer = {
         name: String(form.get("name")).trim(),
+        nit: String(form.get("nit")).trim(),
         channel: String(form.get("channel")).trim(),
+        contactName: String(form.get("contactName")).trim(),
         balance: 0,
-        contact: String(form.get("contact")).trim()
+        contact: String(form.get("contact")).trim(),
+        phone: String(form.get("phone")).trim(),
+        city: String(form.get("city")).trim(),
+        address: String(form.get("address")).trim(),
+        notes: String(form.get("notes")).trim()
       };
       data.customers.push(customer);
       await syncCustomerToCloud(customer);
       await recordActivity("Clientes", "Cliente creado", customer.name);
+    },
+    async supplierForm(event) {
+      const form = new FormData(event.currentTarget);
+      const supplier = {
+        name: String(form.get("name")).trim(),
+        nit: String(form.get("nit")).trim(),
+        category: String(form.get("category")).trim(),
+        contactName: String(form.get("contactName")).trim(),
+        email: String(form.get("email")).trim(),
+        phone: String(form.get("phone")).trim(),
+        city: String(form.get("city")).trim(),
+        address: String(form.get("address")).trim(),
+        paymentTerms: String(form.get("paymentTerms")).trim(),
+        status: String(form.get("status") || "Activo"),
+        notes: String(form.get("notes")).trim()
+      };
+      data.suppliers = data.suppliers || [];
+      data.suppliers.push(supplier);
+      await syncSupplierToCloud(supplier);
+      await recordActivity("Proveedores", "Proveedor creado", supplier.name);
     },
     async settingsForm(event) {
       const form = new FormData(event.currentTarget);

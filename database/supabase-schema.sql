@@ -27,9 +27,39 @@ create table if not exists public.customers (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
   name text not null,
+  nit text,
   channel text not null default 'Retail',
+  contact_name text,
   contact_email text,
+  phone text,
+  city text,
+  address text,
+  notes text,
   balance numeric(14,2) not null default 0,
+  created_at timestamptz not null default now()
+);
+
+alter table public.customers add column if not exists nit text;
+alter table public.customers add column if not exists contact_name text;
+alter table public.customers add column if not exists phone text;
+alter table public.customers add column if not exists city text;
+alter table public.customers add column if not exists address text;
+alter table public.customers add column if not exists notes text;
+
+create table if not exists public.suppliers (
+  id uuid primary key default gen_random_uuid(),
+  company_id uuid not null references public.companies(id) on delete cascade,
+  name text not null,
+  nit text,
+  category text not null default 'General',
+  contact_name text,
+  email text,
+  phone text,
+  city text,
+  address text,
+  payment_terms text,
+  status text not null default 'Activo' check (status in ('Activo', 'En revision', 'Inactivo')),
+  notes text,
   created_at timestamptz not null default now()
 );
 
@@ -170,6 +200,7 @@ add column if not exists category text not null default 'General';
 
 create index if not exists idx_profiles_company_id on public.profiles(company_id);
 create index if not exists idx_customers_company_id on public.customers(company_id);
+create index if not exists idx_suppliers_company_id on public.suppliers(company_id);
 create index if not exists idx_products_company_id on public.products(company_id);
 create index if not exists idx_invoices_company_id on public.invoices(company_id);
 create index if not exists idx_inventory_movements_company_id on public.inventory_movements(company_id);
@@ -184,6 +215,7 @@ create index if not exists idx_activity_logs_company_created on public.activity_
 alter table public.companies enable row level security;
 alter table public.profiles enable row level security;
 alter table public.customers enable row level security;
+alter table public.suppliers enable row level security;
 alter table public.products enable row level security;
 alter table public.invoices enable row level security;
 alter table public.invoice_items enable row level security;
@@ -201,6 +233,7 @@ grant select, insert, update, delete on
   public.companies,
   public.profiles,
   public.customers,
+  public.suppliers,
   public.products,
   public.invoices,
   public.invoice_items,
@@ -241,6 +274,11 @@ using (id = public.current_company_id());
 
 create policy "customers_company_access"
 on public.customers for all
+using (company_id = public.current_company_id())
+with check (company_id = public.current_company_id());
+
+create policy "suppliers_company_access"
+on public.suppliers for all
 using (company_id = public.current_company_id())
 with check (company_id = public.current_company_id());
 
