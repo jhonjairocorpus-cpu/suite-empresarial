@@ -1156,7 +1156,14 @@ function getPublicPlans() {
       modules: ["Inventario", "Clientes", "Contabilidad"],
       kpis: [["Productos", "25"], ["Clientes", "15"], ["Balance", "$ 0"]],
       workflow: ["Registrar productos", "Crear clientes", "Ver ingresos y gastos"],
-      cta: "Interfaz simple para iniciar ordenadamente."
+      cta: "Interfaz simple para iniciar ordenadamente.",
+      demo: {
+        label: "Agregar producto demo",
+        input: "Nombre del producto",
+        placeholder: "Ej. Café molido",
+        button: "Probar inventario",
+        result: "Producto agregado al inventario de prueba. No se guarda."
+      }
     },
     {
       name: "Basico",
@@ -1169,7 +1176,14 @@ function getPublicPlans() {
       modules: ["Inventario", "Clientes", "Cotizaciones", "Reportes"],
       kpis: [["Stock", "120"], ["Cotizado", "$ 2.4M"], ["Clientes", "42"]],
       workflow: ["Controlar stock", "Cotizar por WhatsApp", "Revisar reportes basicos"],
-      cta: "Ideal para vender y cotizar sin llevar todo en cuadernos."
+      cta: "Ideal para vender y cotizar sin llevar todo en cuadernos.",
+      demo: {
+        label: "Crear cotizacion demo",
+        input: "Valor del servicio",
+        placeholder: "Ej. 350000",
+        button: "Calcular cotizacion",
+        result: "Cotizacion calculada con IVA y lista para enviar por WhatsApp."
+      }
     },
     {
       name: "Emprendedor",
@@ -1182,7 +1196,14 @@ function getPublicPlans() {
       modules: ["Facturacion", "Cotizaciones", "Proveedores", "Contabilidad"],
       kpis: [["Ventas", "$ 8.1M"], ["Gastos", "$ 4.2M"], ["Cartera", "$ 900K"]],
       workflow: ["Cotizar", "Facturar", "Comparar ventas vs gastos"],
-      cta: "Pensado para crecer con control financiero mensual."
+      cta: "Pensado para crecer con control financiero mensual.",
+      demo: {
+        label: "Comparar ventas y gastos",
+        input: "Venta del mes",
+        placeholder: "Ej. 2500000",
+        button: "Ver resultado",
+        result: "Resultado operativo calculado para la demo del plan."
+      }
     },
     {
       name: "Empresarial",
@@ -1196,7 +1217,14 @@ function getPublicPlans() {
       modules: ["Facturacion", "POS", "Inventario", "Contabilidad", "Nomina", "Usuarios"],
       kpis: [["Ventas", "$ 21M"], ["Margen", "38%"], ["Usuarios", "8"]],
       workflow: ["Venta descuenta inventario", "Bitacora por usuario", "Reportes y asistente"],
-      cta: "La suite completa para operar oficina, celular y web."
+      cta: "La suite completa para operar oficina, celular y web.",
+      demo: {
+        label: "Simular venta con stock",
+        input: "Producto vendido",
+        placeholder: "Ej. Impresora POS",
+        button: "Descontar stock demo",
+        result: "Venta simulada, inventario descontado y bitacora actualizada."
+      }
     },
     {
       name: "A medida",
@@ -1209,7 +1237,14 @@ function getPublicPlans() {
       modules: ["Portal", "Automatizaciones", "Pagos", "E-commerce", "IA"],
       kpis: [["Flujos", "12"], ["Integraciones", "5"], ["Soporte", "Prioritario"]],
       workflow: ["Mapear proceso", "Conectar integraciones", "Automatizar operacion"],
-      cta: "Construimos la interfaz exacta para el flujo de la empresa."
+      cta: "Construimos la interfaz exacta para el flujo de la empresa.",
+      demo: {
+        label: "Probar automatizacion",
+        input: "Proceso a automatizar",
+        placeholder: "Ej. Enviar cobros por WhatsApp",
+        button: "Simular flujo",
+        result: "Flujo personalizado simulado. Lo real se configura al contratar."
+      }
     }
   ];
 }
@@ -1437,6 +1472,47 @@ function renderLogin() {
       renderLogin();
     });
   }
+
+  bindPublicDemoEvents(publicPlans);
+}
+
+function bindPublicDemoEvents(publicPlans) {
+  document.querySelectorAll("[data-demo-action]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const planName = button.dataset.demoAction;
+      const plan = publicPlans.find((item) => item.name === planName);
+      const input = document.querySelector(`[data-demo-input="${CSS.escape(planName)}"]`);
+      const result = document.querySelector(`[data-demo-result="${CSS.escape(planName)}"]`);
+      const value = String(input?.value || "").trim();
+      if (!plan || !result) {
+        return;
+      }
+
+      let detail = plan.demo.result;
+      if (planName === "Basico") {
+        const amount = Number(value || 0);
+        const tax = Math.round(amount * 0.19);
+        detail = amount > 0
+          ? `Subtotal ${formatMoney(amount)} + IVA ${formatMoney(tax)} = ${formatMoney(amount + tax)}. Solo demo, no se guarda.`
+          : plan.demo.result;
+      } else if (planName === "Emprendedor") {
+        const sales = Number(value || 0);
+        const estimatedExpense = Math.round(sales * 0.58);
+        detail = sales > 0
+          ? `Venta ${formatMoney(sales)}, gasto estimado ${formatMoney(estimatedExpense)}, utilidad ${formatMoney(sales - estimatedExpense)}.`
+          : plan.demo.result;
+      } else if (value) {
+        detail = `${plan.demo.result} Dato probado: ${value}.`;
+      }
+
+      result.textContent = detail;
+      result.classList.add("active");
+      button.textContent = "Demo probado";
+      window.setTimeout(() => {
+        button.textContent = plan.demo.button;
+      }, 1800);
+    });
+  });
 }
 
 function renderPublicPlan(plan) {
@@ -1481,6 +1557,17 @@ function renderPlanInterface(plan) {
         </main>
       </div>
       <p>${escapeHtml(plan.cta)}</p>
+      <div class="plan-demo-box">
+        <div>
+          <span class="panel-label">Demo de prueba</span>
+          <small>No guarda datos, no instala y no reemplaza la app real.</small>
+        </div>
+        <label>${escapeHtml(plan.demo.label)}
+          <input data-demo-input="${escapeHtml(plan.name)}" placeholder="${escapeHtml(plan.demo.placeholder)}">
+        </label>
+        <button class="primary-button" type="button" data-demo-action="${escapeHtml(plan.name)}">${escapeHtml(plan.demo.button)}</button>
+        <p class="demo-result" data-demo-result="${escapeHtml(plan.name)}">Escribe un dato y prueba el flujo del plan.</p>
+      </div>
       <a class="secondary-button" href="https://wa.me/573218247072?text=${encodeURIComponent(`Hola Quantrox Systems, quiero ver la interfaz operativa del plan ${plan.name}`)}" target="_blank" rel="noopener">Ver interfaz del plan</a>
     </article>
   `;
