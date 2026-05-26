@@ -835,11 +835,29 @@ async function syncTaskToCloud(task) {
     return;
   }
 
-  const { error } = await cloudClient.from("tasks").insert({
+  const { data: inserted, error } = await cloudClient.from("tasks").insert({
     company_id: data.company.id,
     text: task.text,
     done: task.done
-  });
+  }).select("id").single();
+
+  if (error) {
+    markCloudPending("Tarea", error);
+    return;
+  }
+
+  task.id = inserted?.id || task.id;
+  markCloudSynced("Tarea");
+}
+
+async function updateCloudTaskStatus(task) {
+  if (!canSyncCloud() || !task.id) {
+    return;
+  }
+
+  const { error } = await cloudClient.from("tasks").update({
+    done: task.done
+  }).eq("id", task.id);
 
   if (error) {
     markCloudPending("Tarea", error);
@@ -847,6 +865,13 @@ async function syncTaskToCloud(task) {
   }
 
   markCloudSynced("Tarea");
+}
+
+async function addTask(text, done = false) {
+  const task = { text, done };
+  data.tasks.unshift(task);
+  await syncTaskToCloud(task);
+  return task;
 }
 
 async function updateCloudInvoiceStatus(invoice) {
@@ -1962,7 +1987,7 @@ function findBotAnswer(question) {
   });
 }
 
-function addBotResponse(question) {
+async function addBotResponse(question) {
   const cleanQuestion = question.trim();
   if (!cleanQuestion) {
     return;
@@ -1979,7 +2004,7 @@ function addBotResponse(question) {
       from: "bot",
       text: "No tengo esa respuesta lista aun. Te puedo escalar a WhatsApp o crear una tarea para soporte."
     });
-    data.tasks.unshift({ text: `Responder consulta: ${cleanQuestion}`, done: false });
+    await addTask(`Responder consulta: ${cleanQuestion}`);
   }
 
   data.quickBot.open = true;
@@ -2130,7 +2155,7 @@ async function markInvoicePaid(invoiceId) {
   }
 
   invoice.status = "Pagada";
-  data.tasks.unshift({ text: `Conciliar pago de ${invoice.id}`, done: false });
+  await addTask(`Conciliar pago de ${invoice.id}`);
   await updateCloudInvoiceStatus(invoice);
   await recordActivity("Facturacion", "Pago marcado", `${invoice.id} marcada como pagada`);
   saveData();
@@ -3197,10 +3222,7 @@ function bindModuleEvents() {
       }
 
       if (quantity > product.stock) {
-        data.tasks.unshift({
-          text: `Revisar stock insuficiente de ${product.name}`,
-          done: false
-        });
+        await addTask(`Revisar stock insuficiente de ${product.name}`);
         saveData();
         window.alert(`Stock insuficiente. ${product.name} tiene ${product.stock} unidad(es) disponibles.`);
         return;
@@ -3428,6 +3450,7 @@ function bindModuleEvents() {
     checkbox.addEventListener("change", async () => {
       const task = data.tasks[Number(checkbox.dataset.task)];
       task.done = checkbox.checked;
+      await updateCloudTaskStatus(task);
       await recordActivity("Tareas", checkbox.checked ? "Tarea completada" : "Tarea reabierta", task.text);
       saveData();
     });
@@ -3466,10 +3489,7 @@ function bindModuleEvents() {
 
   document.querySelectorAll("[data-add-task]").forEach((button) => {
     button.addEventListener("click", async () => {
-      data.tasks.unshift({
-        text: button.dataset.addTask,
-        done: false
-      });
+      await addTask(button.dataset.addTask);
       await recordActivity("Tareas", "Tarea creada", button.dataset.addTask);
       saveData();
       activeModule = "home";
@@ -3484,6 +3504,7 @@ function bindModuleEvents() {
         .filter((item) => item.tone !== "good")
         .map((item) => ({ text: item.action, done: false }));
       data.tasks = [...newTasks, ...data.tasks];
+      await Promise.all(newTasks.map((task) => syncTaskToCloud(task)));
       data.assistant.lastRun = new Date().toISOString();
       await recordActivity("Asistente", "Plan generado", `${newTasks.length} acciones sugeridas`);
       saveData();
@@ -3494,11 +3515,11 @@ function bindModuleEvents() {
   const runAutomation = document.querySelector("[data-run-automation]");
   if (runAutomation) {
     runAutomation.addEventListener("click", async () => {
-      data.tasks.unshift(
-        { text: "Enviar resumen automatico por WhatsApp", done: false },
-        { text: "Revisar integracion de pagos para portal cliente", done: false },
-        { text: "Preparar sincronizacion e-commerce con inventario", done: false }
-      );
+      await Promise.all([
+        addTask("Enviar resumen automatico por WhatsApp"),
+        addTask("Revisar integracion de pagos para portal cliente"),
+        addTask("Preparar sincronizacion e-commerce con inventario")
+      ]);
       await recordActivity("Automatizaciones", "Playbook ejecutado", "Se crearon tareas automaticas");
       saveData();
       activeModule = "home";
@@ -3515,8 +3536,8 @@ function bindModuleEvents() {
   });
 
   document.querySelectorAll("[data-bot-question]").forEach((button) => {
-    button.addEventListener("click", () => {
-      addBotResponse(button.dataset.botQuestion);
+    button.addEventListener("click", async () => {
+      await addBotResponse(button.dataset.botQuestion);
     });
   });
 
@@ -3539,7 +3560,7 @@ function bindModuleEvents() {
         return;
       }
       quotation.status = "Aceptada";
-      data.tasks.unshift({ text: `Preparar factura de cotizacion ${quotation.id}`, done: false });
+      await addTask(`Preparar factura de cotizacion ${quotation.id}`);
       await recordActivity("Cotizaciones", "Cotizacion aceptada", quotation.id);
       saveData();
       render();
@@ -3560,10 +3581,10 @@ function bindModuleEvents() {
 
   const botForm = document.querySelector("#botForm");
   if (botForm) {
-    botForm.addEventListener("submit", (event) => {
+    botForm.addEventListener("submit", async (event) => {
       event.preventDefault();
       const form = new FormData(event.currentTarget);
-      addBotResponse(String(form.get("question") || ""));
+      await addBotResponse(String(form.get("question") || ""));
     });
   }
 }
