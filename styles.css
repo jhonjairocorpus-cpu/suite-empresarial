@@ -112,6 +112,7 @@ a {
 .purchase-steps,
 .pricing-grid,
 .plan-workspaces,
+.plan-portals,
 .public-feature-grid,
 .public-access {
   width: min(1180px, calc(100% - 36px));
@@ -208,6 +209,8 @@ a {
 .pricing-grid,
 .plan-workspaces,
 .plan-interface-grid,
+.plan-portals,
+.plan-portal-grid,
 .public-feature-grid,
 .public-access {
   display: grid;
@@ -363,6 +366,105 @@ a {
 .demo-result.active {
   color: #065f46;
   background: #d1fae5;
+}
+
+.plan-portals {
+  margin-top: 18px;
+}
+
+.plan-portal-grid {
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+
+.plan-portal-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(15, 118, 110, 0.06), rgba(255, 255, 255, 0)),
+    #fff;
+}
+
+.plan-portal-card.featured {
+  border-color: rgba(15, 118, 110, 0.5);
+  box-shadow: 0 24px 60px rgba(15, 118, 110, 0.12);
+}
+
+.portal-browser {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: var(--muted);
+  background: #f8fafc;
+}
+
+.portal-browser span {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+.portal-browser small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+}
+
+.portal-card-head h3 {
+  overflow-wrap: anywhere;
+}
+
+.portal-card-head strong {
+  color: var(--accent);
+  font-size: 1.25rem;
+}
+
+.plan-portal-card p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.portal-action-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.portal-action-grid span {
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+  font-weight: 850;
+}
+
+.portal-demo-panel {
+  display: grid;
+  gap: 10px;
+  border-radius: 8px;
+  padding: 12px;
+  background: #f0fdfa;
+}
+
+.portal-demo-panel small {
+  color: var(--muted);
+  line-height: 1.45;
 }
 
 .plan-app-shell {
@@ -1522,6 +1624,7 @@ textarea {
   .public-topbar,
   .pricing-grid,
   .plan-interface-grid,
+  .plan-portal-grid,
   .public-feature-grid,
   .public-access,
   .login-screen,
@@ -1592,6 +1695,7 @@ textarea {
   .purchase-steps,
   .pricing-grid,
   .plan-workspaces,
+  .plan-portals,
   .public-feature-grid,
   .public-access {
     width: 100%;

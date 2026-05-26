@@ -1163,6 +1163,12 @@ function getPublicPlans() {
         placeholder: "Ej. Café molido",
         button: "Probar inventario",
         result: "Producto agregado al inventario de prueba. No se guarda."
+      },
+      portal: {
+        url: "portal.quantroxsystems.cloud/gratuito",
+        title: "Portal Gratuito",
+        access: "Acceso simple para revisar inventario base y clientes.",
+        actions: ["Ver productos", "Consultar clientes", "Pedir activacion"]
       }
     },
     {
@@ -1183,6 +1189,12 @@ function getPublicPlans() {
         placeholder: "Ej. 350000",
         button: "Calcular cotizacion",
         result: "Cotizacion calculada con IVA y lista para enviar por WhatsApp."
+      },
+      portal: {
+        url: "portal.quantroxsystems.cloud/basico",
+        title: "Portal Basico",
+        access: "Entrada para clientes que cotizan, consultan inventario y revisan reportes basicos.",
+        actions: ["Crear cotizacion", "Ver stock", "Compartir por WhatsApp"]
       }
     },
     {
@@ -1203,6 +1215,12 @@ function getPublicPlans() {
         placeholder: "Ej. 2500000",
         button: "Ver resultado",
         result: "Resultado operativo calculado para la demo del plan."
+      },
+      portal: {
+        url: "portal.quantroxsystems.cloud/emprendedor",
+        title: "Portal Emprendedor",
+        access: "Portal para ventas, gastos, proveedores, cartera y cotizaciones.",
+        actions: ["Comparar meses", "Ver proveedores", "Revisar cartera"]
       }
     },
     {
@@ -1224,6 +1242,12 @@ function getPublicPlans() {
         placeholder: "Ej. Impresora POS",
         button: "Descontar stock demo",
         result: "Venta simulada, inventario descontado y bitacora actualizada."
+      },
+      portal: {
+        url: "portal.quantroxsystems.cloud/empresarial",
+        title: "Portal Empresarial",
+        access: "Portal completo con facturas, pagos, usuarios, reportes y trazabilidad.",
+        actions: ["Ver facturas", "Consultar pagos", "Abrir reportes"]
       }
     },
     {
@@ -1244,6 +1268,12 @@ function getPublicPlans() {
         placeholder: "Ej. Enviar cobros por WhatsApp",
         button: "Simular flujo",
         result: "Flujo personalizado simulado. Lo real se configura al contratar."
+      },
+      portal: {
+        url: "portal.quantroxsystems.cloud/a-medida",
+        title: "Portal A medida",
+        access: "Portal personalizado segun el flujo de cada empresa, integraciones y permisos.",
+        actions: ["Solicitar flujo", "Ver integraciones", "Escalar soporte"]
       }
     }
   ];
@@ -1319,6 +1349,7 @@ function renderLogin() {
         <nav class="public-nav" aria-label="Navegacion publica">
           <a href="#planes">Planes</a>
           <a href="#interfaces">Interfaces</a>
+          <a href="#portales">Portales</a>
           <a href="#funciones">Funciones</a>
           <a href="#comprar">Proceso</a>
           <a href="#acceso">Clientes</a>
@@ -1361,6 +1392,17 @@ function renderLogin() {
         </div>
         <div class="plan-interface-grid">
           ${publicPlans.map((plan) => renderPlanInterface(plan)).join("")}
+        </div>
+      </section>
+
+      <section class="plan-portals" id="portales">
+        <div class="section-heading">
+          <p class="eyebrow">Portales por plan</p>
+          <h2>Cada plan tiene su propia puerta de entrada para clientes y operadores.</h2>
+          <p>Estos portales son vistas de demostracion. El portal real queda privado para la empresa cuando se crea su cuenta y sus usuarios.</p>
+        </div>
+        <div class="plan-portal-grid">
+          ${publicPlans.map((plan) => renderPlanPortal(plan)).join("")}
         </div>
       </section>
 
@@ -1513,6 +1555,24 @@ function bindPublicDemoEvents(publicPlans) {
       }, 1800);
     });
   });
+
+  document.querySelectorAll("[data-portal-demo]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const planName = button.dataset.portalDemo;
+      const plan = publicPlans.find((item) => item.name === planName);
+      const result = document.querySelector(`[data-portal-result="${CSS.escape(planName)}"]`);
+      if (!plan || !result) {
+        return;
+      }
+
+      result.textContent = `${plan.portal.title}: ${plan.portal.actions.join(" | ")}. Acceso real solo con cuenta activada.`;
+      result.classList.add("active");
+      button.textContent = "Portal demo abierto";
+      window.setTimeout(() => {
+        button.textContent = "Abrir portal demo";
+      }, 1800);
+    });
+  });
 }
 
 function renderPublicPlan(plan) {
@@ -1569,6 +1629,34 @@ function renderPlanInterface(plan) {
         <p class="demo-result" data-demo-result="${escapeHtml(plan.name)}">Escribe un dato y prueba el flujo del plan.</p>
       </div>
       <a class="secondary-button" href="https://wa.me/573218247072?text=${encodeURIComponent(`Hola Quantrox Systems, quiero ver la interfaz operativa del plan ${plan.name}`)}" target="_blank" rel="noopener">Ver interfaz del plan</a>
+    </article>
+  `;
+}
+
+function renderPlanPortal(plan) {
+  return `
+    <article class="plan-portal-card ${plan.highlighted ? "featured" : ""}">
+      <div class="portal-browser">
+        <span></span><span></span><span></span>
+        <small>${escapeHtml(plan.portal.url)}</small>
+      </div>
+      <div class="portal-card-head">
+        <div>
+          <span class="panel-label">Portal ${escapeHtml(plan.name)}</span>
+          <h3>${escapeHtml(plan.portal.title)}</h3>
+        </div>
+        <strong>${escapeHtml(plan.price)}</strong>
+      </div>
+      <p>${escapeHtml(plan.portal.access)}</p>
+      <div class="portal-action-grid">
+        ${plan.portal.actions.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+      </div>
+      <div class="portal-demo-panel">
+        <b>Acceso demo</b>
+        <small>Vista publica de prueba. No crea usuario, no guarda datos y no abre la app productiva.</small>
+        <button class="secondary-button" type="button" data-portal-demo="${escapeHtml(plan.name)}">Abrir portal demo</button>
+        <p class="demo-result" data-portal-result="${escapeHtml(plan.name)}">Selecciona el demo para ver que incluiria este portal.</p>
+      </div>
     </article>
   `;
 }
