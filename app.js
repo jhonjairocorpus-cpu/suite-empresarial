@@ -1143,6 +1143,57 @@ function metric(label, value, detail, tone = "") {
   `;
 }
 
+function getPublicPlans() {
+  return [
+    {
+      name: "Gratuito",
+      description: "Para microempresas que quieren empezar a organizarse sin costo.",
+      price: "$ 0",
+      frequency: "activacion base",
+      audience: "Emprendedores y negocios pequenos",
+      features: ["Inventario base", "Clientes", "Contabilidad inicial", "Soporte de activacion"],
+      action: "Activar plan gratuito"
+    },
+    {
+      name: "Basico",
+      description: "Para negocios que ya venden y necesitan controlar clientes, productos y cotizaciones.",
+      price: "$ 29.900",
+      frequency: "mensual desde",
+      audience: "Tiendas, servicios y oficios",
+      features: ["Inventario completo", "Clientes con NIT", "Cotizaciones PDF/WhatsApp", "Reportes basicos"],
+      action: "Solicitar plan Basico"
+    },
+    {
+      name: "Emprendedor",
+      description: "Para equipos pequenos que necesitan vender, cotizar y revisar gastos cada mes.",
+      price: "$ 49.900",
+      frequency: "mensual desde",
+      audience: "Microempresas en crecimiento",
+      features: ["Facturacion interna", "Cotizaciones reales", "Ventas vs gastos", "Proveedores y cartera"],
+      action: "Comprar plan Emprendedor"
+    },
+    {
+      name: "Empresarial",
+      description: "La operacion diaria conectada para empresas que necesitan la suite completa.",
+      price: "$ 79.900",
+      frequency: "mensual desde",
+      audience: "Empresas con varios procesos",
+      features: ["Facturacion conectada a stock", "Comparativos contables", "Usuarios y bitacora", "PWA para celular y oficina"],
+      action: "Comprar plan Empresarial",
+      highlighted: true
+    },
+    {
+      name: "A medida",
+      description: "Para empresas que requieren automatizaciones, integraciones o desarrollos propios.",
+      price: "Cotizar",
+      frequency: "segun alcance",
+      audience: "Procesos especiales",
+      features: ["Automatizaciones", "Portal de clientes", "WhatsApp/pagos/e-commerce", "Acompanamiento Quantrox"],
+      action: "Hablar con asesor"
+    }
+  ];
+}
+
 function render() {
   applyBrandTheme();
 
@@ -1202,6 +1253,7 @@ function render() {
 
 function renderLogin() {
   const cloudConfigured = isCloudConfigured();
+  const publicPlans = getPublicPlans();
   app.innerHTML = `
     <main class="public-site">
       <header class="public-topbar">
@@ -1226,10 +1278,10 @@ function renderLogin() {
         <h1>Invierte en una app que conecta ventas, inventario y contabilidad.</h1>
         <p>Elige un plan, creamos tu cuenta y operas desde oficina, celular o navegador con datos sincronizados en la nube.</p>
         <div class="public-tabs" id="planes">
-          <button class="active" type="button">Facturacion + Inventario</button>
-          <button type="button">POS</button>
+          <button class="active" type="button">Microempresas</button>
+          <button type="button">Inventario</button>
+          <button type="button">Cotizaciones</button>
           <button type="button">Contabilidad</button>
-          <button type="button">Nomina</button>
           <button type="button">Suite completa</button>
         </div>
       </section>
@@ -1242,9 +1294,7 @@ function renderLogin() {
       </section>
 
       <section class="pricing-grid">
-        ${renderPublicPlan("Inicial", "Para empezar organizado", "$ 0", ["Inventario base", "Clientes", "Contabilidad inicial", "Soporte de activacion"], "Solicitar activacion")}
-        ${renderPublicPlan("Empresarial", "Operacion diaria conectada", "$ 79.900", ["Facturacion conectada a stock", "Comparativos contables", "Usuarios y bitacora", "PWA para celular y oficina"], "Comprar plan", true)}
-        ${renderPublicPlan("A medida", "Para procesos propios", "Cotizar", ["Automatizaciones", "Portal de clientes", "Integraciones WhatsApp/pagos", "Acompanamiento Quantrox"], "Hablar con asesor")}
+        ${publicPlans.map((plan) => renderPublicPlan(plan)).join("")}
       </section>
 
       <section class="public-feature-grid" id="funciones">
@@ -1357,18 +1407,20 @@ function renderLogin() {
   }
 }
 
-function renderPublicPlan(name, description, price, features, action, highlighted = false) {
+function renderPublicPlan(plan) {
+  const message = `Hola Quantrox Systems, quiero ${plan.action} (${plan.name}). Me interesa porque soy: ${plan.audience}.`;
   return `
-    <article class="pricing-card ${highlighted ? "featured" : ""}">
-      ${highlighted ? `<span class="plan-ribbon">Recomendado</span>` : ""}
-      <h3>${escapeHtml(name)}</h3>
-      <p>${escapeHtml(description)}</p>
-      <strong>${escapeHtml(price)}</strong>
-      <small>${price.startsWith("$") ? "mensual desde" : "segun alcance"}</small>
+    <article class="pricing-card ${plan.highlighted ? "featured" : ""}">
+      ${plan.highlighted ? `<span class="plan-ribbon">Mas completo</span>` : ""}
+      <h3>${escapeHtml(plan.name)}</h3>
+      <p>${escapeHtml(plan.description)}</p>
+      <strong>${escapeHtml(plan.price)}</strong>
+      <small>${escapeHtml(plan.frequency)}</small>
+      <span class="plan-audience">${escapeHtml(plan.audience)}</span>
       <ul>
-        ${features.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+        ${plan.features.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
       </ul>
-      <a class="${highlighted ? "primary-button" : "secondary-button"}" href="https://wa.me/573218247072?text=${encodeURIComponent(`Hola Quantrox Systems, quiero ${action} de ${name}`)}" target="_blank" rel="noopener">${escapeHtml(action)}</a>
+      <a class="${plan.highlighted ? "primary-button" : "secondary-button"}" href="https://wa.me/573218247072?text=${encodeURIComponent(message)}" target="_blank" rel="noopener">${escapeHtml(plan.action)}</a>
     </article>
   `;
 }
