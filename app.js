@@ -1152,7 +1152,11 @@ function getPublicPlans() {
       frequency: "activacion base",
       audience: "Emprendedores y negocios pequenos",
       features: ["Inventario base", "Clientes", "Contabilidad inicial", "Soporte de activacion"],
-      action: "Activar plan gratuito"
+      action: "Activar plan gratuito",
+      modules: ["Inventario", "Clientes", "Contabilidad"],
+      kpis: [["Productos", "25"], ["Clientes", "15"], ["Balance", "$ 0"]],
+      workflow: ["Registrar productos", "Crear clientes", "Ver ingresos y gastos"],
+      cta: "Interfaz simple para iniciar ordenadamente."
     },
     {
       name: "Basico",
@@ -1161,7 +1165,11 @@ function getPublicPlans() {
       frequency: "mensual desde",
       audience: "Tiendas, servicios y oficios",
       features: ["Inventario completo", "Clientes con NIT", "Cotizaciones PDF/WhatsApp", "Reportes basicos"],
-      action: "Solicitar plan Basico"
+      action: "Solicitar plan Basico",
+      modules: ["Inventario", "Clientes", "Cotizaciones", "Reportes"],
+      kpis: [["Stock", "120"], ["Cotizado", "$ 2.4M"], ["Clientes", "42"]],
+      workflow: ["Controlar stock", "Cotizar por WhatsApp", "Revisar reportes basicos"],
+      cta: "Ideal para vender y cotizar sin llevar todo en cuadernos."
     },
     {
       name: "Emprendedor",
@@ -1170,7 +1178,11 @@ function getPublicPlans() {
       frequency: "mensual desde",
       audience: "Microempresas en crecimiento",
       features: ["Facturacion interna", "Cotizaciones reales", "Ventas vs gastos", "Proveedores y cartera"],
-      action: "Comprar plan Emprendedor"
+      action: "Comprar plan Emprendedor",
+      modules: ["Facturacion", "Cotizaciones", "Proveedores", "Contabilidad"],
+      kpis: [["Ventas", "$ 8.1M"], ["Gastos", "$ 4.2M"], ["Cartera", "$ 900K"]],
+      workflow: ["Cotizar", "Facturar", "Comparar ventas vs gastos"],
+      cta: "Pensado para crecer con control financiero mensual."
     },
     {
       name: "Empresarial",
@@ -1180,7 +1192,11 @@ function getPublicPlans() {
       audience: "Empresas con varios procesos",
       features: ["Facturacion conectada a stock", "Comparativos contables", "Usuarios y bitacora", "PWA para celular y oficina"],
       action: "Comprar plan Empresarial",
-      highlighted: true
+      highlighted: true,
+      modules: ["Facturacion", "POS", "Inventario", "Contabilidad", "Nomina", "Usuarios"],
+      kpis: [["Ventas", "$ 21M"], ["Margen", "38%"], ["Usuarios", "8"]],
+      workflow: ["Venta descuenta inventario", "Bitacora por usuario", "Reportes y asistente"],
+      cta: "La suite completa para operar oficina, celular y web."
     },
     {
       name: "A medida",
@@ -1189,7 +1205,11 @@ function getPublicPlans() {
       frequency: "segun alcance",
       audience: "Procesos especiales",
       features: ["Automatizaciones", "Portal de clientes", "WhatsApp/pagos/e-commerce", "Acompanamiento Quantrox"],
-      action: "Hablar con asesor"
+      action: "Hablar con asesor",
+      modules: ["Portal", "Automatizaciones", "Pagos", "E-commerce", "IA"],
+      kpis: [["Flujos", "12"], ["Integraciones", "5"], ["Soporte", "Prioritario"]],
+      workflow: ["Mapear proceso", "Conectar integraciones", "Automatizar operacion"],
+      cta: "Construimos la interfaz exacta para el flujo de la empresa."
     }
   ];
 }
@@ -1263,6 +1283,7 @@ function renderLogin() {
         </a>
         <nav class="public-nav" aria-label="Navegacion publica">
           <a href="#planes">Planes</a>
+          <a href="#interfaces">Interfaces</a>
           <a href="#funciones">Funciones</a>
           <a href="#comprar">Proceso</a>
           <a href="#acceso">Clientes</a>
@@ -1295,6 +1316,17 @@ function renderLogin() {
 
       <section class="pricing-grid">
         ${publicPlans.map((plan) => renderPublicPlan(plan)).join("")}
+      </section>
+
+      <section class="plan-workspaces" id="interfaces">
+        <div class="section-heading">
+          <p class="eyebrow">Interfaces operativas</p>
+          <h2>Cada plan abre una experiencia distinta segun la necesidad del negocio.</h2>
+          <p>El cliente no entra a una suite vacia: entra a un tablero ajustado al plan que compro y a los modulos que realmente va a usar.</p>
+        </div>
+        <div class="plan-interface-grid">
+          ${publicPlans.map((plan) => renderPlanInterface(plan)).join("")}
+        </div>
       </section>
 
       <section class="public-feature-grid" id="funciones">
@@ -1421,6 +1453,35 @@ function renderPublicPlan(plan) {
         ${plan.features.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
       </ul>
       <a class="${plan.highlighted ? "primary-button" : "secondary-button"}" href="https://wa.me/573218247072?text=${encodeURIComponent(message)}" target="_blank" rel="noopener">${escapeHtml(plan.action)}</a>
+    </article>
+  `;
+}
+
+function renderPlanInterface(plan) {
+  return `
+    <article class="plan-interface ${plan.highlighted ? "featured" : ""}">
+      <header>
+        <div>
+          <span class="panel-label">Plan ${escapeHtml(plan.name)}</span>
+          <h3>${escapeHtml(plan.name)}</h3>
+        </div>
+        <strong>${escapeHtml(plan.price)}</strong>
+      </header>
+      <div class="plan-app-shell">
+        <aside>
+          ${plan.modules.map((item, index) => `<span class="${index === 0 ? "active" : ""}">${escapeHtml(item.charAt(0))} ${escapeHtml(item)}</span>`).join("")}
+        </aside>
+        <main>
+          <div class="plan-kpis">
+            ${plan.kpis.map(([label, value]) => `<b><small>${escapeHtml(label)}</small>${escapeHtml(value)}</b>`).join("")}
+          </div>
+          <div class="plan-flow">
+            ${plan.workflow.map((item, index) => `<span><i>${index + 1}</i>${escapeHtml(item)}</span>`).join("")}
+          </div>
+        </main>
+      </div>
+      <p>${escapeHtml(plan.cta)}</p>
+      <a class="secondary-button" href="https://wa.me/573218247072?text=${encodeURIComponent(`Hola Quantrox Systems, quiero ver la interfaz operativa del plan ${plan.name}`)}" target="_blank" rel="noopener">Ver interfaz del plan</a>
     </article>
   `;
 }

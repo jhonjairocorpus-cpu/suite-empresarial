@@ -111,6 +111,7 @@ a {
 .public-hero,
 .purchase-steps,
 .pricing-grid,
+.plan-workspaces,
 .public-feature-grid,
 .public-access {
   width: min(1180px, calc(100% - 36px));
@@ -205,6 +206,8 @@ a {
 }
 
 .pricing-grid,
+.plan-workspaces,
+.plan-interface-grid,
 .public-feature-grid,
 .public-access {
   display: grid;
@@ -269,6 +272,150 @@ a {
   margin: 4px 0;
   padding-left: 18px;
   color: var(--muted);
+}
+
+.plan-workspaces {
+  margin-top: 18px;
+}
+
+.section-heading {
+  display: grid;
+  gap: 10px;
+  max-width: 780px;
+}
+
+.section-heading h2 {
+  font-size: clamp(2rem, 4vw, 3.6rem);
+  line-height: 1.05;
+}
+
+.section-heading p:not(.eyebrow) {
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.plan-interface-grid {
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+}
+
+.plan-interface {
+  display: grid;
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 20px;
+  background: #fff;
+}
+
+.plan-interface.featured {
+  border-color: rgba(15, 118, 110, 0.5);
+  box-shadow: 0 24px 60px rgba(15, 118, 110, 0.13);
+}
+
+.plan-interface header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.plan-interface header strong {
+  color: var(--accent);
+  font-size: 1.25rem;
+}
+
+.plan-interface p {
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.plan-app-shell {
+  display: grid;
+  grid-template-columns: minmax(116px, 0.42fr) minmax(0, 1fr);
+  min-height: 250px;
+  overflow: hidden;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.plan-app-shell aside {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px;
+  color: #cbd5e1;
+  background: #07111f;
+}
+
+.plan-app-shell aside span {
+  border-radius: 8px;
+  padding: 9px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.plan-app-shell aside span.active {
+  color: #07111f;
+  background: var(--gold);
+}
+
+.plan-app-shell main {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  padding: 14px;
+}
+
+.plan-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+  gap: 8px;
+}
+
+.plan-kpis b {
+  display: grid;
+  gap: 6px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.plan-kpis small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.plan-flow {
+  display: grid;
+  gap: 8px;
+}
+
+.plan-flow span {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #dce4ef;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.plan-flow i {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #fff;
+  background: var(--accent);
+  font-style: normal;
+  font-size: 0.8rem;
 }
 
 .public-feature-grid {
@@ -1338,6 +1485,7 @@ textarea {
   .danger-zone,
   .public-topbar,
   .pricing-grid,
+  .plan-interface-grid,
   .public-feature-grid,
   .public-access,
   .login-screen,
@@ -1407,9 +1555,15 @@ textarea {
   .public-hero,
   .purchase-steps,
   .pricing-grid,
+  .plan-workspaces,
   .public-feature-grid,
   .public-access {
     width: 100%;
+  }
+
+  .plan-app-shell,
+  .plan-kpis {
+    grid-template-columns: 1fr;
   }
 
   .nav-list {
