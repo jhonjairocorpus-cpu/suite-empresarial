@@ -58,6 +58,28 @@ jsonb_to_recordset('[
   {"name":"Servicios Cloud Andinos","nit":"900.888.112-3","category":"Tecnologia","contact_name":"Soporte comercial","email":"ventas@cloudandinos.com","phone":"3012223344","city":"Cali","address":"Remoto","payment_terms":"Contado","status":"Activo","notes":"Hosting, dominios y soporte tecnico"}
 ]'::jsonb) as item(name text, nit text, category text, contact_name text, email text, phone text, city text, address text, payment_terms text, status text, notes text);
 
+insert into public.quotations (company_id, number, customer_name, contact_email, service, quantity, unit_price, tax_rate, subtotal, tax, total, status, valid_until, issued_at, notes)
+select c.id, item.number, item.customer_name, item.contact_email, item.service, item.quantity, item.unit_price, item.tax_rate, item.subtotal, item.tax, item.total, item.status, item.valid_until::date, item.issued_at::date, item.notes
+from (select id from public.companies where nit = '901.235.884-1') c,
+jsonb_to_recordset('[
+  {"number":"CT-1003","customer_name":"Mercado La 80","contact_email":"admin@la80.com","service":"Suite empresarial + inventario","quantity":1,"unit_price":79900,"tax_rate":19,"subtotal":79900,"tax":15181,"total":95081,"status":"Enviada","valid_until":"2026-06-15","issued_at":"2026-05-24","notes":"Incluye configuracion inicial y acompanamiento remoto."},
+  {"number":"CT-1002","customer_name":"Cafe Norte","contact_email":"gerencia@cafenorte.com","service":"Desarrollo de portal de clientes","quantity":1,"unit_price":1200000,"tax_rate":19,"subtotal":1200000,"tax":228000,"total":1428000,"status":"Aceptada","valid_until":"2026-06-05","issued_at":"2026-05-23","notes":"Alcance sujeto a integraciones de pago."}
+]'::jsonb) as item(number text, customer_name text, contact_email text, service text, quantity numeric, unit_price numeric, tax_rate numeric, subtotal numeric, tax numeric, total numeric, status text, valid_until text, issued_at text, notes text)
+on conflict (company_id, number) do update set
+  customer_name = excluded.customer_name,
+  contact_email = excluded.contact_email,
+  service = excluded.service,
+  quantity = excluded.quantity,
+  unit_price = excluded.unit_price,
+  tax_rate = excluded.tax_rate,
+  subtotal = excluded.subtotal,
+  tax = excluded.tax,
+  total = excluded.total,
+  status = excluded.status,
+  valid_until = excluded.valid_until,
+  issued_at = excluded.issued_at,
+  notes = excluded.notes;
+
 insert into public.tasks (company_id, text, done)
 select c.id, item.text, item.done
 from (select id from public.companies where nit = '901.235.884-1') c,

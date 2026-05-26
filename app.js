@@ -46,6 +46,10 @@ const defaultData = {
     { id: "FE-1047", customer: "Mercado La 80", product: "Venta general", quantity: 1, status: "Pendiente", date: "2026-05-23", subtotal: 760000, tax: 144400, dianStatus: "Por enviar", paymentLink: "https://pay.quantroxsystems.cloud/FE-1047" },
     { id: "FE-1046", customer: "Cafe Norte", product: "Servicio tecnico", quantity: 1, status: "Pagada", date: "2026-05-23", subtotal: 420000, tax: 79800, dianStatus: "Validada", cufe: "CUFE-DEMO-FE1046", xmlUrl: "https://docs.quantroxsystems.cloud/xml/FE-1046.xml", qrUrl: "https://docs.quantroxsystems.cloud/qr/FE-1046.png", dianResponse: "Validacion simulada exitosa", paymentLink: "https://pay.quantroxsystems.cloud/FE-1046" }
   ],
+  quotations: [
+    { id: "CT-1003", customer: "Mercado La 80", contact: "admin@la80.com", service: "Suite empresarial + inventario", quantity: 1, unitPrice: 79900, taxRate: 19, status: "Enviada", validUntil: "2026-06-15", date: "2026-05-24", notes: "Incluye configuracion inicial y acompanamiento remoto." },
+    { id: "CT-1002", customer: "Cafe Norte", contact: "gerencia@cafenorte.com", service: "Desarrollo de portal de clientes", quantity: 1, unitPrice: 1200000, taxRate: 19, status: "Aceptada", validUntil: "2026-06-05", date: "2026-05-23", notes: "Alcance sujeto a integraciones de pago." }
+  ],
   dianEvents: [
     { date: "2026-05-24", invoice: "FE-1048", event: "Factura validada", status: "Validada", response: "CUFE generado en modo prueba" },
     { date: "2026-05-23", invoice: "FE-1046", event: "Factura validada", status: "Validada", response: "XML y QR preparados" }
@@ -168,6 +172,7 @@ const defaultData = {
 const moduleMeta = {
   home: { title: "Centro de control", eyebrow: "Operacion en vivo" },
   invoices: { title: "Facturacion electronica", eyebrow: "Ventas y DIAN" },
+  quotations: { title: "Cotizaciones", eyebrow: "Propuestas comerciales" },
   dian: { title: "Proveedor DIAN", eyebrow: "Cumplimiento electronico" },
   pos: { title: "POS inteligente", eyebrow: "Caja y pagos" },
   inventory: { title: "Inventario", eyebrow: "Stock y costos" },
@@ -186,6 +191,7 @@ const moduleMeta = {
 const navItems = [
   ["home", "Inicio", "H"],
   ["invoices", "Facturacion", "F"],
+  ["quotations", "Cotizaciones", "T"],
   ["dian", "DIAN", "D"],
   ["pos", "POS", "P"],
   ["inventory", "Inventario", "I"],
@@ -344,6 +350,7 @@ async function loadCloudData() {
     companyResult,
     customersResult,
     suppliersResult,
+    quotationsResult,
     productsResult,
     invoicesResult,
     accountingResult,
@@ -356,6 +363,7 @@ async function loadCloudData() {
     cloudClient.from("companies").select("*").eq("id", companyId).single(),
     cloudClient.from("customers").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("suppliers").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
+    cloudClient.from("quotations").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("products").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("invoices").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("accounting_entries").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -414,6 +422,21 @@ async function loadCloudData() {
     address: item.address || "",
     paymentTerms: item.payment_terms || "",
     status: item.status || "Activo",
+    notes: item.notes || ""
+  }));
+
+  data.quotations = (quotationsResult.data || []).map((item) => ({
+    id: item.number,
+    dbId: item.id,
+    customer: item.customer_name,
+    contact: item.contact_email || "",
+    service: item.service,
+    quantity: Number(item.quantity || 1),
+    unitPrice: Number(item.unit_price || 0),
+    taxRate: Number(item.tax_rate || 19),
+    status: item.status || "Borrador",
+    validUntil: item.valid_until || "",
+    date: item.issued_at || item.created_at?.slice(0, 10) || getToday(),
     notes: item.notes || ""
   }));
 
@@ -735,6 +758,45 @@ async function syncSupplierToCloud(supplier) {
   markCloudSynced("Proveedor");
 }
 
+async function syncQuotationToCloud(quotation) {
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  const subtotal = getQuotationSubtotal(quotation);
+  const tax = getQuotationTax(quotation);
+  const payload = {
+    company_id: data.company.id,
+    number: quotation.id,
+    customer_name: quotation.customer,
+    contact_email: quotation.contact,
+    service: quotation.service,
+    quantity: quotation.quantity,
+    unit_price: quotation.unitPrice,
+    tax_rate: quotation.taxRate,
+    subtotal,
+    tax,
+    total: subtotal + tax,
+    status: quotation.status,
+    valid_until: quotation.validUntil || null,
+    issued_at: quotation.date,
+    notes: quotation.notes
+  };
+  const { data: inserted, error } = await cloudClient
+    .from("quotations")
+    .insert(payload)
+    .select("id")
+    .single();
+
+  if (error) {
+    markCloudPending("Cotizacion", error);
+    return;
+  }
+
+  quotation.dbId = inserted?.id || quotation.dbId;
+  markCloudSynced("Cotizacion");
+}
+
 async function syncTaskToCloud(task) {
   if (!canSyncCloud()) {
     return;
@@ -811,6 +873,7 @@ async function clearCompanyOperationalData() {
     "inventory_movements",
     "invoice_items",
     "invoices",
+    "quotations",
     "accounting_entries",
     "tasks",
     "employees",
@@ -850,6 +913,7 @@ async function clearCompanyOperationalData() {
   data.suppliers = [];
   data.inventory = [];
   data.invoices = [];
+  data.quotations = [];
   data.accounting = [];
   data.payroll = [];
   data.tasks = [];
@@ -1382,6 +1446,7 @@ function renderActiveModule() {
   const renderers = {
     home: renderHome,
     invoices: renderInvoices,
+    quotations: renderQuotations,
     dian: renderDian,
     pos: renderPos,
     inventory: renderInventory,
@@ -1411,6 +1476,33 @@ function getInvoicePaymentLink(invoice) {
 function getInvoiceWhatsAppUrl(invoice) {
   const text = `Hola ${invoice.customer}, te compartimos la factura ${invoice.id} por ${formatMoney(getInvoiceTotal(invoice))}. Puedes pagar aqui: ${getInvoicePaymentLink(invoice)}`;
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+function getQuotationSubtotal(quotation) {
+  return Number(quotation.quantity || 0) * Number(quotation.unitPrice || 0);
+}
+
+function getQuotationTax(quotation) {
+  return Math.round(getQuotationSubtotal(quotation) * (Number(quotation.taxRate || 0) / 100));
+}
+
+function getQuotationTotal(quotation) {
+  return getQuotationSubtotal(quotation) + getQuotationTax(quotation);
+}
+
+function getQuotationWhatsAppUrl(quotation) {
+  const text = `Hola ${quotation.customer}, te compartimos la cotizacion ${quotation.id} por ${formatMoney(getQuotationTotal(quotation))}. Vigencia: ${quotation.validUntil || "por definir"}.`;
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+function renderQuotationActions(quotation) {
+  return `
+    <div class="row-actions">
+      <button class="mini-action" type="button" data-print-quotation="${escapeHtml(quotation.id)}">PDF</button>
+      <a class="mini-action" href="${getQuotationWhatsAppUrl(quotation)}" target="_blank" rel="noopener">WhatsApp</a>
+      ${quotation.status !== "Aceptada" ? `<button class="mini-action success" type="button" data-accept-quotation="${escapeHtml(quotation.id)}">Aceptar</button>` : ""}
+    </div>
+  `;
 }
 
 function renderInvoiceActions(invoice) {
@@ -1637,6 +1729,78 @@ function printInvoice(invoiceId) {
   printable.document.close();
 }
 
+function printQuotation(quotationId) {
+  const quotation = (data.quotations || []).find((item) => item.id === quotationId);
+  if (!quotation) {
+    return;
+  }
+
+  const printable = window.open("", "_blank", "width=900,height=720");
+  if (!printable) {
+    window.alert("Permite ventanas emergentes para generar la cotizacion.");
+    return;
+  }
+
+  const subtotal = getQuotationSubtotal(quotation);
+  const tax = getQuotationTax(quotation);
+  const total = getQuotationTotal(quotation);
+  printable.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeHtml(quotation.id)}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 40px; color: #0f172a; }
+          .quote { max-width: 760px; margin: 0 auto; }
+          .top { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0f766e; padding-bottom: 20px; }
+          h1 { margin: 0; font-size: 34px; }
+          h2 { margin: 0 0 8px; font-size: 18px; color: #0f766e; }
+          table { width: 100%; margin-top: 28px; border-collapse: collapse; }
+          th, td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+          .totals { margin-top: 24px; display: grid; gap: 8px; justify-content: end; }
+          .totals p { margin: 0; min-width: 260px; display: flex; justify-content: space-between; }
+          .total { font-size: 22px; font-weight: 800; }
+          .note { margin-top: 28px; padding: 14px; background: #ecfdf5; border-radius: 8px; }
+        </style>
+      </head>
+      <body>
+        <main class="quote">
+          <section class="top">
+            <div>
+              <h2>${escapeHtml(data.company.name)}</h2>
+              <p>NIT ${escapeHtml(data.company.nit)}<br>${escapeHtml(data.company.city)}<br>${escapeHtml(data.company.email)}</p>
+            </div>
+            <div>
+              <h1>${escapeHtml(quotation.id)}</h1>
+              <p>Fecha: ${escapeHtml(quotation.date)}<br>Vigencia: ${escapeHtml(quotation.validUntil || "Por definir")}<br>Estado: ${escapeHtml(quotation.status)}</p>
+            </div>
+          </section>
+          <p><b>Cliente:</b> ${escapeHtml(quotation.customer)}<br><b>Contacto:</b> ${escapeHtml(quotation.contact || "No registrado")}</p>
+          <table>
+            <thead><tr><th>Producto / Servicio</th><th>Cantidad</th><th>Valor unitario</th><th>Subtotal</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>${escapeHtml(quotation.service)}</td>
+                <td>${escapeHtml(String(quotation.quantity || 1))}</td>
+                <td>${formatMoney(quotation.unitPrice)}</td>
+                <td>${formatMoney(subtotal)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="totals">
+            <p><span>Subtotal</span><b>${formatMoney(subtotal)}</b></p>
+            <p><span>IVA ${escapeHtml(String(quotation.taxRate || 0))}%</span><b>${formatMoney(tax)}</b></p>
+            <p class="total"><span>Total</span><b>${formatMoney(total)}</b></p>
+          </div>
+          <div class="note">${escapeHtml(quotation.notes || "Cotizacion sujeta a disponibilidad y aprobacion del cliente.")}</div>
+        </main>
+        <script>window.print();</script>
+      </body>
+    </html>
+  `);
+  printable.document.close();
+}
+
 async function markInvoicePaid(invoiceId) {
   const invoice = data.invoices.find((item) => item.id === invoiceId);
   if (!invoice) {
@@ -1755,6 +1919,79 @@ function renderInvoices() {
       badge(item.status, item.status === "Pagada" ? "good" : "warn"),
       formatMoney(getInvoiceTotal(item)),
       renderInvoiceActions(item)
+    ]))}
+  `;
+}
+
+function renderQuotations() {
+  const quotations = data.quotations || [];
+  const totalQuoted = quotations.reduce((sum, item) => sum + getQuotationTotal(item), 0);
+  const accepted = quotations.filter((item) => item.status === "Aceptada");
+  const sent = quotations.filter((item) => item.status === "Enviada");
+  return `
+    <section class="summary-grid">
+      ${metric("Cotizaciones", quotations.length, "Propuestas creadas")}
+      ${metric("Valor cotizado", formatMoney(totalQuoted), "Total comercial")}
+      ${metric("Aceptadas", accepted.length, "Listas para facturar", accepted.length ? "good" : "")}
+      ${metric("En seguimiento", sent.length, "Pendientes de respuesta", sent.length ? "attention" : "")}
+    </section>
+    <section class="dashboard-grid">
+      <article class="panel">
+        <h3>Nueva cotizacion <span class="panel-label">Cliente real</span></h3>
+        <form class="form-grid" id="quotationForm">
+          <label>Cliente <input name="customer" required list="customerOptions" placeholder="Nombre o razon social"></label>
+          <label>Correo / contacto <input name="contact" type="email" placeholder="cliente@empresa.com"></label>
+          <label>Producto o servicio <input name="service" required list="productServiceOptions" placeholder="Servicio o producto requerido"></label>
+          <label>Cantidad <input name="quantity" required min="1" step="0.01" type="number" value="1"></label>
+          <label>Valor unitario <input name="unitPrice" required min="0" type="number" placeholder="0"></label>
+          <label>IVA %
+            <select name="taxRate">
+              <option value="19">19%</option>
+              <option value="5">5%</option>
+              <option value="0">0%</option>
+            </select>
+          </label>
+          <label>Vigente hasta <input name="validUntil" type="date"></label>
+          <label>Estado
+            <select name="status">
+              <option>Borrador</option>
+              <option>Enviada</option>
+              <option>Aceptada</option>
+              <option>Rechazada</option>
+            </select>
+          </label>
+          <label class="span-2">Notas <textarea name="notes" rows="3" placeholder="Alcance, tiempos de entrega, condiciones de pago o garantias"></textarea></label>
+          <button class="primary-button" type="submit">Crear cotizacion</button>
+        </form>
+        <datalist id="customerOptions">
+          ${(data.customers || []).map((item) => `<option value="${escapeHtml(item.name)}">${escapeHtml(item.contact || item.phone || item.nit || "")}</option>`).join("")}
+        </datalist>
+        <datalist id="productServiceOptions">
+          ${(data.inventory || []).map((item) => `<option value="${escapeHtml(item.name)}">${formatMoney(item.price)}</option>`).join("")}
+          <option value="Desarrollo web"></option>
+          <option value="Suite empresarial"></option>
+          <option value="Automatizacion con IA"></option>
+          <option value="Soporte tecnico"></option>
+        </datalist>
+      </article>
+      <article class="panel">
+        <h3>Flujo recomendado <span class="panel-label">Ventas</span></h3>
+        <div class="timeline">
+          <span><b>1. Cotizar</b><small>Producto, servicio, IVA y vigencia.</small></span>
+          <span><b>2. Enviar</b><small>PDF o WhatsApp al cliente.</small></span>
+          <span><b>3. Aprobar</b><small>Marcar como aceptada.</small></span>
+          <span><b>4. Facturar</b><small>Convertir a venta en la siguiente fase.</small></span>
+        </div>
+      </article>
+    </section>
+    ${renderTable("Cotizaciones recientes", ["Numero", "Cliente", "Producto / Servicio", "Vigencia", "Estado", "Total", "Acciones"], quotations.map((item) => [
+      item.id,
+      item.customer,
+      item.service,
+      item.validUntil || "Por definir",
+      badge(item.status, item.status === "Aceptada" ? "good" : item.status === "Rechazada" ? "danger" : "info"),
+      formatMoney(getQuotationTotal(item)),
+      renderQuotationActions(item)
     ]))}
   `;
 }
@@ -2691,6 +2928,28 @@ function bindModuleEvents() {
       }
       await recordActivity("Facturacion", "Factura creada", `${invoice.id} vendio ${quantity} x ${product.name}`);
     },
+    async quotationForm(event) {
+      const form = new FormData(event.currentTarget);
+      const quotationNumber = `CT-${1001 + (data.quotations || []).length}`;
+      const quotation = {
+        id: quotationNumber,
+        customer: String(form.get("customer")).trim(),
+        contact: String(form.get("contact")).trim(),
+        service: String(form.get("service")).trim(),
+        quantity: Number(form.get("quantity")),
+        unitPrice: Number(form.get("unitPrice")),
+        taxRate: Number(form.get("taxRate")),
+        status: String(form.get("status")),
+        validUntil: String(form.get("validUntil") || ""),
+        date: getToday(),
+        notes: String(form.get("notes")).trim()
+      };
+
+      data.quotations = data.quotations || [];
+      data.quotations.unshift(quotation);
+      await syncQuotationToCloud(quotation);
+      await recordActivity("Cotizaciones", "Cotizacion creada", `${quotation.id} para ${quotation.customer}`);
+    },
     async dianForm(event) {
       const form = new FormData(event.currentTarget);
       data.dian.provider = String(form.get("provider")).trim();
@@ -2934,6 +3193,26 @@ function bindModuleEvents() {
   document.querySelectorAll("[data-print-invoice]").forEach((button) => {
     button.addEventListener("click", () => {
       printInvoice(button.dataset.printInvoice);
+    });
+  });
+
+  document.querySelectorAll("[data-print-quotation]").forEach((button) => {
+    button.addEventListener("click", () => {
+      printQuotation(button.dataset.printQuotation);
+    });
+  });
+
+  document.querySelectorAll("[data-accept-quotation]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const quotation = (data.quotations || []).find((item) => item.id === button.dataset.acceptQuotation);
+      if (!quotation) {
+        return;
+      }
+      quotation.status = "Aceptada";
+      data.tasks.unshift({ text: `Preparar factura de cotizacion ${quotation.id}`, done: false });
+      await recordActivity("Cotizaciones", "Cotizacion aceptada", quotation.id);
+      saveData();
+      render();
     });
   });
 

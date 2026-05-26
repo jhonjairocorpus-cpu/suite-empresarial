@@ -19,6 +19,7 @@ Esta suite ya tiene una base preparada para Supabase/PostgreSQL. La app publicad
 - `profiles`: usuarios y roles conectados a `auth.users`.
 - `customers`: clientes comerciales con NIT, contacto, telefono, ciudad, direccion y notas.
 - `suppliers`: proveedores/terceros con NIT, contacto, categoria, condiciones de pago y estado.
+- `quotations`: cotizaciones comerciales con cliente, producto/servicio, IVA, total, vigencia y estado.
 - `products`: inventario.
 - `invoices` e `invoice_items`: facturacion/POS.
 - `inventory_movements`: entradas, salidas y ajustes de inventario generados por facturas o compras.
@@ -94,6 +95,8 @@ Tambien puedes usar `database/supabase-seed-demo.sql` para crear la empresa, el 
 
 Si tu base ya existe y solo quieres activar clientes ampliados + proveedores, ejecuta `database/2026-05-26-customers-suppliers.sql` en el SQL Editor de Supabase.
 
+Para activar el modulo de cotizaciones en una base existente, ejecuta `database/2026-05-26-quotations.sql` en el SQL Editor de Supabase.
+
 ## Sincronizacion actual
 
 Con Supabase activo, la app ya:
@@ -101,6 +104,7 @@ Con Supabase activo, la app ya:
 - Inicia sesion con `signInWithPassword`.
 - Carga empresa, usuario, clientes, productos, facturas, contabilidad, nomina, tareas y movimientos.
 - Carga proveedores y datos completos de clientes cuando la migracion de proveedores ya fue aplicada.
+- Crea y carga cotizaciones reales cuando la migracion de cotizaciones ya fue aplicada.
 - Sincroniza facturas nuevas con inventario y contabilidad.
 - Sincroniza productos nuevos.
 - Sincroniza clientes nuevos.
