@@ -576,9 +576,11 @@ function canSyncCloud() {
 }
 
 function markCloudSynced(label) {
+  cloudError = "";
   data.cloud.syncStatus = `${label} sincronizado`;
   data.cloud.lastSync = label;
   data.cloud.lastBackup = new Date().toLocaleString("es-CO");
+  data.cloud.pendingSync = 0;
 }
 
 function markCloudPending(label, error) {
@@ -606,7 +608,7 @@ async function recordActivity(area, action, detail) {
     return;
   }
 
-  const { data: inserted } = await cloudClient.from("activity_logs").insert({
+  const { data: inserted, error } = await cloudClient.from("activity_logs").insert({
     company_id: data.company.id,
     user_email: activity.user,
     area: activity.area,
@@ -614,6 +616,11 @@ async function recordActivity(area, action, detail) {
     detail: activity.detail,
     created_at: activity.date
   }).select("id").single();
+
+  if (error) {
+    markCloudPending("Actividad", error);
+    return;
+  }
 
   activity.id = inserted?.id || activity.id;
 }
@@ -699,6 +706,29 @@ async function syncProductToCloud(product) {
 
   product.id = inserted.id;
   markCloudSynced("Producto");
+}
+
+async function syncEmployeeToCloud(employee) {
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  const payload = {
+    company_id: data.company.id,
+    full_name: employee.name,
+    role: employee.role,
+    salary: employee.salary,
+    status: employee.status || "Activa"
+  };
+  const { data: inserted, error } = await cloudClient.from("employees").insert(payload).select("id").single();
+
+  if (error) {
+    markCloudPending("Empleado", error);
+    return;
+  }
+
+  employee.id = inserted?.id || employee.id;
+  markCloudSynced("Empleado");
 }
 
 async function syncCustomerToCloud(customer) {
@@ -1325,6 +1355,7 @@ function render() {
           <button class="avatar-button" type="button" data-action="logout">${escapeHtml(data.company.user.charAt(0))}</button>
         </div>
       </header>
+      ${cloudError ? `<div class="cloud-error workspace-alert">${escapeHtml(cloudError)}</div>` : ""}
       <section id="modulePanel">${renderActiveModule()}</section>
     </main>
     ${renderQuickBot()}
@@ -3289,13 +3320,15 @@ function bindModuleEvents() {
     },
     async payrollForm(event) {
       const form = new FormData(event.currentTarget);
-      data.payroll.push({
+      const employee = {
         name: String(form.get("name")).trim(),
         role: String(form.get("role")).trim(),
         salary: Number(form.get("salary")),
         status: "Activa"
-      });
-      await recordActivity("Nomina", "Empleado agregado", String(form.get("name")).trim());
+      };
+      data.payroll.push(employee);
+      await syncEmployeeToCloud(employee);
+      await recordActivity("Nomina", "Empleado agregado", employee.name);
     },
     async customerForm(event) {
       const form = new FormData(event.currentTarget);
@@ -3376,9 +3409,15 @@ function bindModuleEvents() {
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      await handler(event);
-      saveData();
-      render();
+      try {
+        await handler(event);
+      } catch (error) {
+        cloudError = error?.message || "No se pudo guardar la informacion.";
+        data.cloud.syncStatus = "Error de guardado";
+      } finally {
+        saveData();
+        render();
+      }
     });
   });
 

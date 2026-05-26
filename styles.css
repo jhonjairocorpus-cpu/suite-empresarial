@@ -623,6 +623,11 @@ a {
   line-height: 1.45;
 }
 
+.workspace-alert {
+  margin-bottom: 16px;
+  max-width: 100%;
+}
+
 .cloud-notice {
   border: 1px solid rgba(15, 118, 110, 0.22);
   border-radius: 8px;
