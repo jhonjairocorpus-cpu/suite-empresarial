@@ -586,7 +586,10 @@ function markCloudSynced(label) {
 function markCloudPending(label, error) {
   data.cloud.pendingSync = Number(data.cloud.pendingSync || 0) + 1;
   data.cloud.syncStatus = `${label} pendiente`;
-  cloudError = error?.message || cloudError;
+  const message = error?.message || cloudError;
+  cloudError = String(message || "").includes("schema cache")
+    ? `${label} pendiente: falta una tabla o columna en Supabase. Ejecuta database/2026-05-26-persistence-fixes.sql en el SQL Editor.`
+    : message;
 }
 
 function getCurrentUserLabel() {
