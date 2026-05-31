@@ -352,6 +352,8 @@ async function loadCloudData() {
     return;
   }
 
+  const localSnapshot = getLocalOperationalSnapshot();
+
   const { data: profile, error: profileError } = await cloudClient
     .from("profiles")
     .select("id, company_id, full_name, role, status")
@@ -538,6 +540,9 @@ async function loadCloudData() {
     detail: item.detail
   }));
 
+  restorePendingLocalRecords(localSnapshot);
+  await syncPendingRecords();
+
   data.cloud.mode = "Cloud conectado";
   data.cloud.syncStatus = "Datos sincronizados";
   data.cloud.lastBackup = new Date().toLocaleString("es-CO");
@@ -546,8 +551,124 @@ async function loadCloudData() {
   saveData();
 }
 
+function getLocalOperationalSnapshot() {
+  return {
+    customers: [...(data.customers || [])],
+    suppliers: [...(data.suppliers || [])],
+    quotations: [...(data.quotations || [])],
+    inventory: [...(data.inventory || [])],
+    invoices: [...(data.invoices || [])],
+    accounting: [...(data.accounting || [])],
+    payroll: [...(data.payroll || [])],
+    tasks: [...(data.tasks || [])],
+    inventoryMovements: [...(data.inventoryMovements || [])]
+  };
+}
+
+function getCloudIdentityKey(listName) {
+  return ["quotations", "invoices"].includes(listName) ? "dbId" : "id";
+}
+
+function restorePendingLocalRecords(snapshot) {
+  Object.entries(snapshot).forEach(([listName, localRows]) => {
+    if (!Array.isArray(data[listName])) {
+      return;
+    }
+
+    const idKey = getCloudIdentityKey(listName);
+    const cloudIds = new Set(data[listName].map((item) => item?.[idKey]).filter(Boolean));
+    const pendingRows = localRows.filter((item) => item?._pendingCloud && !cloudIds.has(item?.[idKey]));
+
+    data[listName] = [
+      ...pendingRows.map((item) => ({ ...item, _pendingCloud: true })),
+      ...data[listName]
+    ];
+  });
+}
+
+function markLocalPending(item, label, error) {
+  if (item) {
+    item._pendingCloud = true;
+    item._pendingReason = error?.message || "Pendiente de sincronizar";
+  }
+  markCloudPending(label, error);
+}
+
+function markLocalSynced(item) {
+  if (!item) {
+    return;
+  }
+
+  delete item._pendingCloud;
+  delete item._pendingReason;
+}
+
+async function syncPendingRecords() {
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  for (const item of data.inventory || []) {
+    if (item._pendingCloud) {
+      await syncProductToCloud(item);
+    }
+  }
+
+  for (const item of data.customers || []) {
+    if (item._pendingCloud) {
+      await syncCustomerToCloud(item);
+    }
+  }
+
+  for (const item of data.suppliers || []) {
+    if (item._pendingCloud) {
+      await syncSupplierToCloud(item);
+    }
+  }
+
+  for (const item of data.payroll || []) {
+    if (item._pendingCloud) {
+      await syncEmployeeToCloud(item);
+    }
+  }
+
+  for (const item of data.quotations || []) {
+    if (item._pendingCloud) {
+      await syncQuotationToCloud(item);
+    }
+  }
+
+  for (const item of data.tasks || []) {
+    if (item._pendingCloud) {
+      await syncTaskToCloud(item);
+    }
+  }
+
+  for (const invoice of data.invoices || []) {
+    if (!invoice._pendingCloud) {
+      continue;
+    }
+
+    const product = getProductBySku(invoice.sku);
+    const movement = (data.inventoryMovements || []).find((item) => item._pendingCloud && item.origin === `Factura ${invoice.id}`);
+    const entry = (data.accounting || []).find((item) => item._pendingCloud && item.detail?.includes(invoice.id));
+    if (product && movement && entry) {
+      await syncInvoiceToCloud(invoice, product, movement, entry);
+    }
+  }
+
+  for (const item of data.accounting || []) {
+    if (item._pendingCloud) {
+      await syncAccountingEntryToCloud(item);
+    }
+  }
+}
+
 async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountingEntry) {
   if (!cloudReady || !cloudSession || !data.company.id || !product.id) {
+    markLocalPending(invoice, "Factura", { message: "Sin sesion cloud o producto no sincronizado" });
+    markLocalPending(inventoryMovement, "Movimiento de inventario", { message: "Factura pendiente de sincronizar" });
+    markLocalPending(accountingEntry, "Movimiento contable", { message: "Factura pendiente de sincronizar" });
     return;
   }
 
@@ -567,12 +688,15 @@ async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountin
   }).select("id").single();
 
   if (invoiceError) {
+    markLocalPending(invoice, "Factura", invoiceError);
+    markLocalPending(inventoryMovement, "Movimiento de inventario", invoiceError);
+    markLocalPending(accountingEntry, "Movimiento contable", invoiceError);
     throw invoiceError;
   }
 
   invoice.dbId = insertedInvoice.id;
 
-  await Promise.all([
+  const [stockResult, movementResult, accountingResult] = await Promise.all([
     cloudClient.from("products").update({ stock: product.stock }).eq("id", product.id),
     cloudClient.from("inventory_movements").insert({
       company_id: data.company.id,
@@ -581,9 +705,23 @@ async function syncInvoiceToCloud(invoice, product, inventoryMovement, accountin
       quantity: inventoryMovement.quantity,
       origin: inventoryMovement.origin,
       movement_date: inventoryMovement.date
-    }),
+    }).select("id").single(),
     insertAccountingEntryCloud(accountingEntry, invoice.date)
   ]);
+
+  const childError = stockResult.error || movementResult.error || accountingResult.error;
+  if (childError) {
+    markLocalPending(invoice, "Factura", childError);
+    markLocalPending(inventoryMovement, "Movimiento de inventario", childError);
+    markLocalPending(accountingEntry, "Movimiento contable", childError);
+    return;
+  }
+
+  inventoryMovement.id = movementResult.data?.id || inventoryMovement.id;
+  accountingEntry.id = accountingResult.data?.id || accountingEntry.id;
+  markLocalSynced(invoice);
+  markLocalSynced(inventoryMovement);
+  markLocalSynced(accountingEntry);
 
   data.cloud.syncStatus = "Ultima factura sincronizada";
   data.cloud.lastBackup = new Date().toLocaleString("es-CO");
@@ -649,18 +787,19 @@ async function recordActivity(area, action, detail) {
 
 async function syncAccountingEntryToCloud(entry) {
   if (!canSyncCloud()) {
-    markCloudPending("Movimiento contable", { message: "Sin sesion cloud" });
+    markLocalPending(entry, "Movimiento contable", { message: "Sin sesion cloud" });
     return;
   }
 
   const { data: inserted, error } = await insertAccountingEntryCloud(entry, entry.date || getToday());
 
   if (error) {
-    markCloudPending("Movimiento contable", error);
+    markLocalPending(entry, "Movimiento contable", error);
     return;
   }
 
   entry.id = inserted?.id || entry.id;
+  markLocalSynced(entry);
   markCloudSynced("Movimiento contable");
 }
 
@@ -707,6 +846,7 @@ async function syncCompanyToCloud() {
 
 async function syncProductToCloud(product) {
   if (!canSyncCloud()) {
+    markLocalPending(product, "Producto", { message: "Sin sesion cloud" });
     return;
   }
 
@@ -722,16 +862,18 @@ async function syncProductToCloud(product) {
   const { data: inserted, error } = await cloudClient.from("products").upsert(payload, { onConflict: "company_id,sku" }).select("id").single();
 
   if (error) {
-    markCloudPending("Producto", error);
+    markLocalPending(product, "Producto", error);
     return;
   }
 
   product.id = inserted.id;
+  markLocalSynced(product);
   markCloudSynced("Producto");
 }
 
 async function syncEmployeeToCloud(employee) {
   if (!canSyncCloud()) {
+    markLocalPending(employee, "Empleado", { message: "Sin sesion cloud" });
     return;
   }
 
@@ -745,16 +887,18 @@ async function syncEmployeeToCloud(employee) {
   const { data: inserted, error } = await cloudClient.from("employees").insert(payload).select("id").single();
 
   if (error) {
-    markCloudPending("Empleado", error);
+    markLocalPending(employee, "Empleado", error);
     return;
   }
 
   employee.id = inserted?.id || employee.id;
+  markLocalSynced(employee);
   markCloudSynced("Empleado");
 }
 
 async function syncCustomerToCloud(customer) {
   if (!canSyncCloud()) {
+    markLocalPending(customer, "Cliente", { message: "Sin sesion cloud" });
     return;
   }
 
@@ -771,18 +915,21 @@ async function syncCustomerToCloud(customer) {
     notes: customer.notes,
     balance: customer.balance
   };
-  const { error } = await cloudClient.from("customers").insert(payload);
+  const { data: inserted, error } = await cloudClient.from("customers").insert(payload).select("id").single();
 
   if (error) {
-    markCloudPending("Cliente", error);
+    markLocalPending(customer, "Cliente", error);
     return;
   }
 
+  customer.id = inserted?.id || customer.id;
+  markLocalSynced(customer);
   markCloudSynced("Cliente");
 }
 
 async function syncSupplierToCloud(supplier) {
   if (!canSyncCloud()) {
+    markLocalPending(supplier, "Proveedor", { message: "Sin sesion cloud" });
     return;
   }
 
@@ -800,18 +947,21 @@ async function syncSupplierToCloud(supplier) {
     status: supplier.status,
     notes: supplier.notes
   };
-  const { error } = await cloudClient.from("suppliers").insert(payload);
+  const { data: inserted, error } = await cloudClient.from("suppliers").insert(payload).select("id").single();
 
   if (error) {
-    markCloudPending("Proveedor", error);
+    markLocalPending(supplier, "Proveedor", error);
     return;
   }
 
+  supplier.id = inserted?.id || supplier.id;
+  markLocalSynced(supplier);
   markCloudSynced("Proveedor");
 }
 
 async function syncQuotationToCloud(quotation) {
   if (!canSyncCloud()) {
+    markLocalPending(quotation, "Cotizacion", { message: "Sin sesion cloud" });
     return;
   }
 
@@ -841,16 +991,18 @@ async function syncQuotationToCloud(quotation) {
     .single();
 
   if (error) {
-    markCloudPending("Cotizacion", error);
+    markLocalPending(quotation, "Cotizacion", error);
     return;
   }
 
   quotation.dbId = inserted?.id || quotation.dbId;
+  markLocalSynced(quotation);
   markCloudSynced("Cotizacion");
 }
 
 async function syncTaskToCloud(task) {
   if (!canSyncCloud()) {
+    markLocalPending(task, "Tarea", { message: "Sin sesion cloud" });
     return;
   }
 
@@ -861,11 +1013,12 @@ async function syncTaskToCloud(task) {
   }).select("id").single();
 
   if (error) {
-    markCloudPending("Tarea", error);
+    markLocalPending(task, "Tarea", error);
     return;
   }
 
   task.id = inserted?.id || task.id;
+  markLocalSynced(task);
   markCloudSynced("Tarea");
 }
 
@@ -3516,6 +3669,7 @@ function bindModuleEvents() {
       event.preventDefault();
       try {
         await handler(event);
+        await syncPendingRecords();
       } catch (error) {
         cloudError = error?.message || "No se pudo guardar la informacion.";
         data.cloud.syncStatus = "Error de guardado";
