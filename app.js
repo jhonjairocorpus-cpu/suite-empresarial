@@ -279,6 +279,13 @@ async function loadCloudSession() {
     authenticated = true;
     localStorage.setItem("quantrox-suite-auth", "true");
     await loadCloudData();
+    return;
+  }
+
+  if (isCloudConfigured()) {
+    authenticated = false;
+    localStorage.removeItem("quantrox-suite-auth");
+    data.cloud.syncStatus = "Inicia sesion para guardar en Supabase";
   }
 }
 
@@ -577,7 +584,10 @@ function restorePendingLocalRecords(snapshot) {
 
     const idKey = getCloudIdentityKey(listName);
     const cloudIds = new Set(data[listName].map((item) => item?.[idKey]).filter(Boolean));
-    const pendingRows = localRows.filter((item) => item?._pendingCloud && !cloudIds.has(item?.[idKey]));
+    const pendingRows = localRows.filter((item) => {
+      const sameCompany = !item?._pendingCompanyId || item._pendingCompanyId === data.company.id;
+      return item?._pendingCloud && sameCompany && !cloudIds.has(item?.[idKey]);
+    });
 
     data[listName] = [
       ...pendingRows.map((item) => ({ ...item, _pendingCloud: true })),
@@ -590,6 +600,8 @@ function markLocalPending(item, label, error) {
   if (item) {
     item._pendingCloud = true;
     item._pendingReason = error?.message || "Pendiente de sincronizar";
+    item._pendingCompanyId = data.company.id || "";
+    item._pendingUserEmail = cloudSession?.user?.email || "";
   }
   markCloudPending(label, error);
 }
@@ -601,6 +613,8 @@ function markLocalSynced(item) {
 
   delete item._pendingCloud;
   delete item._pendingReason;
+  delete item._pendingCompanyId;
+  delete item._pendingUserEmail;
 }
 
 async function syncPendingRecords() {
@@ -3297,6 +3311,7 @@ function renderSettings() {
   const cloudSteps = [
     { label: "Credenciales", value: cloudConfigured ? "Listas" : "Pendientes", tone: cloudConfigured ? "good" : "warn" },
     { label: "Sesion", value: cloudSession ? "Activa" : "Local", tone: cloudSession ? "good" : "info" },
+    { label: "Usuario cloud", value: cloudSession?.user?.email || "Sin sesion", tone: cloudSession ? "good" : "warn" },
     { label: "Empresa cloud", value: data.company.id ? "Vinculada" : "Sin ID", tone: data.company.id ? "good" : "warn" },
     { label: "Pendientes", value: Number(data.cloud.pendingSync || 0), tone: Number(data.cloud.pendingSync || 0) ? "warn" : "good" }
   ];
@@ -3888,6 +3903,10 @@ async function initializeApp() {
   initCloudClient();
   passwordRecoveryMode = isPasswordRecoveryUrl();
   await loadCloudSession();
+  if (isCloudConfigured() && !passwordRecoveryMode && !cloudSession) {
+    authenticated = false;
+    localStorage.removeItem("quantrox-suite-auth");
+  }
   render();
 }
 
