@@ -292,6 +292,25 @@ async function signInCloud(email, password) {
   await loadCloudData();
 }
 
+function getAuthErrorMessage(error) {
+  const message = String(error?.message || "");
+  const status = error?.status;
+
+  if (message.toLowerCase().includes("invalid login credentials")) {
+    return "Correo o clave incorrectos. Usa el correo exacto registrado en Supabase y la clave del usuario, no la clave de la base de datos. Si no recuerdas la clave, usa Recuperar contrasena.";
+  }
+
+  if (message.toLowerCase().includes("email not confirmed")) {
+    return "El correo todavia no esta confirmado. Revisa el correo de invitacion o confirma el usuario desde Supabase Authentication.";
+  }
+
+  if (status === 400 || status === 401) {
+    return "No se pudo iniciar sesion. Revisa correo, clave y que el usuario este activo en Supabase.";
+  }
+
+  return message || "No se pudo iniciar sesion.";
+}
+
 async function sendPasswordReset(email) {
   if (!cloudReady) {
     throw new Error("Supabase no esta activo.");
@@ -1582,7 +1601,7 @@ function renderLogin() {
       window.scrollTo(0, 0);
       render();
     } catch (error) {
-      cloudError = error.message || "No se pudo iniciar sesion.";
+      cloudError = getAuthErrorMessage(error);
       renderLogin();
     }
   });
