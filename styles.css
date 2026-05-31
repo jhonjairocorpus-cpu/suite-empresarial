@@ -904,6 +904,17 @@ h3 {
   background: var(--accent);
 }
 
+.mini-action.danger {
+  color: var(--danger);
+  border-color: rgba(180, 35, 24, 0.24);
+  background: #fff7f6;
+}
+
+.mini-action.danger:hover {
+  border-color: rgba(180, 35, 24, 0.5);
+  background: #fee4e2;
+}
+
 .avatar-button {
   width: 42px;
   padding: 0;

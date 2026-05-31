@@ -915,6 +915,56 @@ function canManageCompanyData() {
   return ["Propietario", "Administrador"].includes(role);
 }
 
+const deleteConfig = {
+  customers: { list: "customers", table: "customers", label: "cliente", area: "Clientes" },
+  suppliers: { list: "suppliers", table: "suppliers", label: "proveedor", area: "Proveedores" },
+  inventory: { list: "inventory", table: "products", label: "producto", area: "Inventario" },
+  inventoryMovements: { list: "inventoryMovements", table: "inventory_movements", label: "movimiento de inventario", area: "Inventario" },
+  accounting: { list: "accounting", table: "accounting_entries", label: "movimiento contable", area: "Contabilidad" },
+  payroll: { list: "payroll", table: "employees", label: "empleado", area: "Nomina" },
+  quotations: { list: "quotations", table: "quotations", label: "cotizacion", area: "Cotizaciones", idKey: "dbId" },
+  invoices: { list: "invoices", table: "invoices", label: "factura", area: "Facturacion", idKey: "dbId" },
+  tasks: { list: "tasks", table: "tasks", label: "tarea", area: "Tareas" }
+};
+
+function getDeleteLabel(item) {
+  return item?.name || item?.fullName || item?.customer || item?.detail || item?.product || item?.text || item?.id || item?.sku || "registro";
+}
+
+async function deleteCloudRecord(config, item) {
+  const recordId = item?.[config.idKey || "id"];
+  if (!canSyncCloud() || !recordId) {
+    return;
+  }
+
+  const { error } = await cloudClient.from(config.table).delete().eq("id", recordId);
+  if (error) {
+    markCloudPending(`Eliminar ${config.label}`, error);
+    throw error;
+  }
+}
+
+async function deleteRecord(type, index) {
+  const config = deleteConfig[type];
+  const list = config ? data[config.list] : null;
+  const item = Array.isArray(list) ? list[index] : null;
+  if (!config || !item) {
+    return;
+  }
+
+  const label = getDeleteLabel(item);
+  const confirmed = window.confirm(`Eliminar ${config.label}: ${label}? Esta accion solo elimina este registro.`);
+  if (!confirmed) {
+    return;
+  }
+
+  await deleteCloudRecord(config, item);
+  list.splice(index, 1);
+  await recordActivity(config.area, "Registro eliminado", `${config.label}: ${label}`);
+  saveData();
+  render();
+}
+
 async function clearCompanyOperationalData() {
   if (!canSyncCloud()) {
     throw new Error("Debes iniciar sesion en cloud para limpiar datos de empresa.");
@@ -2208,6 +2258,7 @@ function renderHome() {
             <label class="task-item">
               <input type="checkbox" data-task="${index}" ${task.done ? "checked" : ""}>
               <span>${escapeHtml(task.text)}</span>
+              ${renderDeleteAction("tasks", index)}
             </label>
           `).join("")}
         </div>
@@ -2258,14 +2309,14 @@ function renderInvoices() {
         </ul>
       </article>
     </section>
-    ${renderTable("Facturas recientes", ["Numero", "Cliente", "Producto", "DIAN", "Estado", "Total", "Acciones"], data.invoices.map((item) => [
+    ${renderTable("Facturas recientes", ["Numero", "Cliente", "Producto", "DIAN", "Estado", "Total", "Acciones"], data.invoices.map((item, index) => [
       item.id,
       item.customer,
       item.product || "Venta general",
       badge(item.dianStatus || "Borrador", item.dianStatus === "Validada" ? "good" : "info"),
       badge(item.status, item.status === "Pagada" ? "good" : "warn"),
       formatMoney(getInvoiceTotal(item)),
-      renderInvoiceActions(item)
+      `${renderInvoiceActions(item)} ${renderDeleteAction("invoices", index)}`
     ]))}
   `;
 }
@@ -2331,14 +2382,14 @@ function renderQuotations() {
         </div>
       </article>
     </section>
-    ${renderTable("Cotizaciones recientes", ["Numero", "Cliente", "Producto / Servicio", "Vigencia", "Estado", "Total", "Acciones"], quotations.map((item) => [
+    ${renderTable("Cotizaciones recientes", ["Numero", "Cliente", "Producto / Servicio", "Vigencia", "Estado", "Total", "Acciones"], quotations.map((item, index) => [
       item.id,
       item.customer,
       item.service,
       item.validUntil || "Por definir",
       badge(item.status, item.status === "Aceptada" ? "good" : item.status === "Rechazada" ? "danger" : "info"),
       formatMoney(getQuotationTotal(item)),
-      renderQuotationActions(item)
+      `${renderQuotationActions(item)} ${renderDeleteAction("quotations", index)}`
     ]))}
   `;
 }
@@ -2481,18 +2532,20 @@ function renderInventory() {
       formatMoney(item.totalCost),
       item.balance
     ]))}
-    ${renderTable("Movimientos de inventario", ["Fecha", "Tipo", "Producto", "Cantidad", "Origen"], data.inventoryMovements.map((item) => [
+    ${renderTable("Movimientos de inventario", ["Fecha", "Tipo", "Producto", "Cantidad", "Origen", "Acciones"], data.inventoryMovements.map((item, index) => [
       item.date,
       badge(item.type, item.type === "Entrada" ? "good" : "warn"),
       item.product,
       item.quantity,
-      item.origin
+      item.origin,
+      renderDeleteAction("inventoryMovements", index)
     ]))}
-    ${renderTable("Inventario activo", ["SKU", "Producto", "Stock", "Precio"], data.inventory.map((item) => [
+    ${renderTable("Inventario activo", ["SKU", "Producto", "Stock", "Precio", "Acciones"], data.inventory.map((item, index) => [
       item.sku,
       item.name,
       `${item.stock} ${item.stock <= item.min ? badge("Bajo", "warn") : ""}`,
-      formatMoney(item.price)
+      formatMoney(item.price),
+      renderDeleteAction("inventory", index)
     ]))}
   `;
 }
@@ -2610,13 +2663,14 @@ function renderAccounting() {
         </ul>
       </article>
     </section>
-    ${renderTable("Movimientos", ["Fecha", "Detalle", "Categoria", "Cuenta", "Tipo", "Monto"], data.accounting.map((item, index) => [
+    ${renderTable("Movimientos", ["Fecha", "Detalle", "Categoria", "Cuenta", "Tipo", "Monto", "Acciones"], data.accounting.map((item, index) => [
       getEntryDate(item, index),
       item.detail,
       item.category || item.account,
       item.account,
       badge(item.type, item.type === "Ingreso" ? "good" : "danger"),
-      formatMoney(item.amount)
+      formatMoney(item.amount),
+      renderDeleteAction("accounting", index)
     ]))}
   `;
 }
@@ -2628,6 +2682,10 @@ function renderCompareBar(label, amount, max, tone) {
       <div class="compare-track"><i style="width:${Math.max(4, Math.round((amount / max) * 100))}%"></i></div>
     </div>
   `;
+}
+
+function renderDeleteAction(type, index, label = "Eliminar") {
+  return `<button class="mini-action danger" type="button" data-delete-type="${escapeHtml(type)}" data-delete-index="${index}">${escapeHtml(label)}</button>`;
 }
 
 function renderPayroll() {
@@ -2647,11 +2705,12 @@ function renderPayroll() {
         <button class="primary-button" type="submit">Agregar empleado</button>
       </form>
     </section>
-    ${renderTable("Equipo", ["Nombre", "Cargo", "Estado", "Salario"], data.payroll.map((item) => [
+    ${renderTable("Equipo", ["Nombre", "Cargo", "Estado", "Salario", "Acciones"], data.payroll.map((item, index) => [
       item.name,
       item.role,
       badge(item.status),
-      formatMoney(item.salary)
+      formatMoney(item.salary),
+      renderDeleteAction("payroll", index)
     ]))}
   `;
 }
@@ -2679,14 +2738,15 @@ function renderCustomers() {
         <button class="primary-button" type="submit">Guardar cliente</button>
       </form>
     </section>
-    ${renderTable("Clientes activos", ["Cliente", "NIT", "Canal", "Contacto", "Telefono", "Ciudad", "Cartera"], customers.map((item) => [
+    ${renderTable("Clientes activos", ["Cliente", "NIT", "Canal", "Contacto", "Telefono", "Ciudad", "Cartera", "Acciones"], customers.map((item, index) => [
       item.name,
       item.nit || "Pendiente",
       item.channel,
       item.contact ? `${item.contactName ? `${item.contactName} - ` : ""}${item.contact}` : "Pendiente",
       item.phone || "Pendiente",
       item.city || "Pendiente",
-      formatMoney(item.balance)
+      formatMoney(item.balance),
+      renderDeleteAction("customers", index)
     ]))}
   `;
 }
@@ -2722,14 +2782,15 @@ function renderSuppliers() {
         <button class="primary-button" type="submit">Guardar proveedor</button>
       </form>
     </section>
-    ${renderTable("Proveedores registrados", ["Proveedor", "NIT", "Categoria", "Contacto", "Telefono", "Pago", "Estado"], suppliers.map((item) => [
+    ${renderTable("Proveedores registrados", ["Proveedor", "NIT", "Categoria", "Contacto", "Telefono", "Pago", "Estado", "Acciones"], suppliers.map((item, index) => [
       item.name,
       item.nit || "Pendiente",
       item.category || "General",
       item.email ? `${item.contactName ? `${item.contactName} - ` : ""}${item.email}` : "Pendiente",
       item.phone || "Pendiente",
       item.paymentTerms || "Sin definir",
-      badge(item.status || "Activo")
+      badge(item.status || "Activo"),
+      renderDeleteAction("suppliers", index)
     ]))}
   `;
 }
@@ -3453,6 +3514,20 @@ function bindModuleEvents() {
       await updateCloudTaskStatus(task);
       await recordActivity("Tareas", checkbox.checked ? "Tarea completada" : "Tarea reabierta", task.text);
       saveData();
+    });
+  });
+
+  document.querySelectorAll("[data-delete-type]").forEach((button) => {
+    button.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      try {
+        await deleteRecord(button.dataset.deleteType, Number(button.dataset.deleteIndex));
+      } catch (error) {
+        cloudError = error?.message || "No se pudo eliminar el registro.";
+        saveData();
+        render();
+      }
     });
   });
 
