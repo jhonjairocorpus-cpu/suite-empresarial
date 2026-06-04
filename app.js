@@ -2306,6 +2306,7 @@ function printPalaciosQuotation(printable, quotation, items, subtotal, tax, tota
   const companyEmail = data.company.email || "palaciosconstructores.sas@gmail.com";
   const reference = getPalaciosQuoteReference(quotation);
   const footer = data.company.quoteFooter || "NUESTRA PROPUESTA DE PRECIOS TIENE VIGENCIA DE 30 DIAS CALENDARIO.";
+  const palaciosLogo = data.company.logoUrl || "assets/palacios-logo.png";
 
   printable.document.write(`
     <!doctype html>
@@ -2317,6 +2318,8 @@ function printPalaciosQuotation(printable, quotation, items, subtotal, tax, tota
           * { box-sizing: border-box; }
           body { margin: 0; color: #111827; background: #ffffff; font-family: "Baskerville Old Face", Georgia, "Times New Roman", serif; font-size: 12px; }
           .sheet { max-width: 760px; margin: 0 auto; }
+          .logo-wrap { margin: 0 0 12px; text-align: center; }
+          .logo-img { display: inline-block; width: min(100%, 720px); max-height: 150px; object-fit: contain; }
           .header { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; align-items: start; margin-bottom: 10px; }
           .company p { margin: 0 0 4px; line-height: 1.28; }
           .company .name { font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0; }
@@ -2352,6 +2355,9 @@ function printPalaciosQuotation(printable, quotation, items, subtotal, tax, tota
       </head>
       <body>
         <main class="sheet">
+          <div class="logo-wrap">
+            <img class="logo-img" src="${escapeHtml(palaciosLogo)}" alt="${escapeHtml(companyName)}" onerror="this.closest('.logo-wrap').style.display='none'">
+          </div>
           <section class="header">
             <div class="company">
               <p class="name">${escapeHtml(companyName)}</p>
