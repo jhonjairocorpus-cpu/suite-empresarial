@@ -2295,6 +2295,148 @@ function isPalaciosCompany() {
   return company.includes("PALACIOS") || company.includes("901-326-858") || company.includes("901326858");
 }
 
+function getPalaciosQuoteReference(quotation) {
+  return quotation.notes || getQuotationSummary(quotation) || "Servicios y materiales de obra.";
+}
+
+function printPalaciosQuotation(printable, quotation, items, subtotal, tax, total) {
+  const companyName = data.company.commercialName || data.company.name || "Palacios Constructores";
+  const companyNit = data.company.nit || "901.326.858-0";
+  const companyCity = data.company.city || "Santander de Quilichao, Cauca";
+  const companyEmail = data.company.email || "palaciosconstructores.sas@gmail.com";
+  const reference = getPalaciosQuoteReference(quotation);
+  const footer = data.company.quoteFooter || "NUESTRA PROPUESTA DE PRECIOS TIENE VIGENCIA DE 30 DIAS CALENDARIO.";
+
+  printable.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <title>${escapeHtml(quotation.id)}</title>
+        <style>
+          @page { size: letter; margin: 18mm 14mm; }
+          * { box-sizing: border-box; }
+          body { margin: 0; color: #111827; background: #ffffff; font-family: "Baskerville Old Face", Georgia, "Times New Roman", serif; font-size: 12px; }
+          .sheet { max-width: 760px; margin: 0 auto; }
+          .header { display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 18px; align-items: start; margin-bottom: 10px; }
+          .company p { margin: 0 0 4px; line-height: 1.28; }
+          .company .name { font-size: 18px; font-weight: 700; text-transform: uppercase; letter-spacing: 0; }
+          .quote-title { text-align: right; font-size: 18px; font-weight: 700; margin: 0 0 12px; }
+          .meta { width: 100%; border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 12px; }
+          .meta th { width: 44%; text-align: right; padding: 4px 8px; font-family: "Baskerville Old Face", Georgia, serif; font-weight: 700; background: #d9eaf7; border: 1px solid #111827; }
+          .meta td { padding: 4px 8px; border: 1px solid #111827; text-align: center; }
+          .intro { display: grid; grid-template-columns: 1fr 1.7fr; gap: 12px; margin: 12px 0; }
+          .block-title { margin: 0; padding: 6px 8px; font-weight: 700; background: #5b9bd5; color: #111827; border: 1px solid #111827; }
+          .client-title { background: #bdd7ee; }
+          .ref-box, .client-box { border: 1px solid #111827; border-top: 0; min-height: 82px; padding: 8px; line-height: 1.35; }
+          .client-box p { margin: 0 0 4px; }
+          table.items { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 10px; font-family: "Baskerville Old Face", Georgia, serif; }
+          .items th { background: #5b9bd5; color: #111827; border: 1px solid #111827; padding: 6px 5px; text-align: center; font-size: 11px; }
+          .items td { border: 1px solid #111827; padding: 7px 6px; vertical-align: top; line-height: 1.25; }
+          .items .item { width: 7%; text-align: center; }
+          .items .desc { width: 47%; }
+          .items .unit { width: 11%; text-align: center; }
+          .items .qty { width: 9%; text-align: center; }
+          .items .money { width: 13%; text-align: right; font-family: Calibri, Arial, sans-serif; }
+          .bottom { display: grid; grid-template-columns: 1.6fr 0.85fr; gap: 14px; margin-top: 14px; align-items: start; }
+          .terms { border: 1px solid #111827; min-height: 132px; }
+          .terms h3 { margin: 0; padding: 7px 8px; font-size: 11px; background: #5b9bd5; border-bottom: 1px solid #111827; }
+          .terms ol { margin: 8px 10px 8px 24px; padding: 0; line-height: 1.45; font-size: 10.5px; }
+          .totals { width: 100%; border-collapse: collapse; font-family: Calibri, Arial, sans-serif; font-size: 13px; }
+          .totals th, .totals td { border: 1px solid #111827; padding: 7px 8px; }
+          .totals th { text-align: right; font-weight: 700; background: #f3f4f6; }
+          .totals td { text-align: right; font-weight: 700; }
+          .sign { margin-top: 14px; border: 1px solid #111827; min-height: 74px; padding: 9px; font-size: 11px; }
+          .print-note { margin-top: 14px; color: #4b5563; font-family: Calibri, Arial, sans-serif; font-size: 10px; }
+          @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .sheet { max-width: none; } }
+        </style>
+      </head>
+      <body>
+        <main class="sheet">
+          <section class="header">
+            <div class="company">
+              <p class="name">${escapeHtml(companyName)}</p>
+              <p>NIT: ${escapeHtml(companyNit)}</p>
+              <p>${escapeHtml(companyCity)}</p>
+              <p>${escapeHtml(companyEmail)}</p>
+              <p>${escapeHtml(data.company.phone || "323 482 95 70 - 310 560 54 10")}</p>
+            </div>
+            <div>
+              <h1 class="quote-title">COTIZACION</h1>
+              <table class="meta">
+                <tr><th>FECHA</th><td>${escapeHtml(quotation.date || new Date().toISOString().slice(0, 10))}</td></tr>
+                <tr><th>COTIZACION No</th><td>${escapeHtml(quotation.id)}</td></tr>
+                <tr><th>CLIENTE</th><td>${escapeHtml(quotation.customer || "Cliente")}</td></tr>
+              </table>
+            </div>
+          </section>
+
+          <section class="intro">
+            <div>
+              <p class="block-title">REFERENCIA:</p>
+              <div class="ref-box">${escapeHtml(reference)}</div>
+            </div>
+            <div>
+              <p class="block-title client-title">CLIENTE</p>
+              <div class="client-box">
+                <p><b>EMPRESA:</b> ${escapeHtml(quotation.customer || "Cliente")}</p>
+                <p><b>SOLICITA:</b> ${escapeHtml(quotation.contact || "No registrado")}</p>
+                <p><b>EMAIL:</b> ${escapeHtml(quotation.contact || "No registrado")}</p>
+              </div>
+            </div>
+          </section>
+
+          <table class="items">
+            <thead>
+              <tr>
+                <th class="item">ITEM</th>
+                <th class="desc">DESCRIPCION</th>
+                <th class="unit">UNIDAD</th>
+                <th class="qty">CANT</th>
+                <th class="money">Vr/ UNIT.</th>
+                <th class="money">Vr/ TOTAL</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${items.map((item, index) => `
+                <tr>
+                  <td class="item">${index + 1}</td>
+                  <td class="desc">${escapeHtml(item.service)}</td>
+                  <td class="unit">${escapeHtml(item.unit || "UND")}</td>
+                  <td class="qty">${escapeHtml(String(item.quantity))}</td>
+                  <td class="money">${formatMoney(item.unitPrice)}</td>
+                  <td class="money">${formatMoney(item.quantity * item.unitPrice)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+
+          <section class="bottom">
+            <div>
+              <div class="terms">
+                <h3>TERMINOS Y CONDICIONES.</h3>
+                <ol>
+                  <li>${escapeHtml(footer)}</li>
+                  <li>PLAZO DE EJECUCION: ${escapeHtml(quotation.validUntil ? `vigente hasta ${quotation.validUntil}` : "por definir")}.</li>
+                  <li>FORMA DE PAGO: transferencia bancaria o condiciones acordadas.</li>
+                  <li>POR FAVOR ENVIAR LA COTIZACION FIRMADA AL EMAIL INDICADO ANTERIORMENTE.</li>
+                </ol>
+              </div>
+              <div class="sign">FIRMA DEL CLIENTE:</div>
+            </div>
+            <table class="totals">
+              <tr><th>SUBTOTAL</th><td>${formatMoney(subtotal)}</td></tr>
+              <tr><th>IVA DEL ${escapeHtml(String(quotation.taxRate || 0))}%</th><td>${formatMoney(tax)}</td></tr>
+              <tr><th>TOTAL</th><td>${formatMoney(total)}</td></tr>
+            </table>
+          </section>
+          <p class="print-note">Formato personalizado para Palacios Constructores.</p>
+        </main>
+        <script>window.print();</script>
+      </body>
+    </html>
+  `);
+}
+
 function renderQuotationActions(quotation) {
   return `
     <div class="row-actions">
@@ -2547,6 +2689,12 @@ function printQuotation(quotationId) {
   const items = getQuotationItems(quotation);
   const accent = getQuoteAccent();
   const palacios = isPalaciosCompany();
+  if (palacios) {
+    printPalaciosQuotation(printable, quotation, items, subtotal, tax, total);
+    printable.document.close();
+    return;
+  }
+
   printable.document.write(`
     <!doctype html>
     <html>
