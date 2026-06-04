@@ -10,6 +10,10 @@ create table if not exists public.companies (
   city text,
   email text,
   plan text not null default 'Suite Integral',
+  logo_url text,
+  accent_color text,
+  quote_accent text,
+  quote_footer text,
   created_at timestamptz not null default now()
 );
 
@@ -117,6 +121,16 @@ create table if not exists public.invoice_items (
   line_total numeric(14,2) generated always as (quantity * unit_price) stored
 );
 
+create table if not exists public.quotation_items (
+  id uuid primary key default gen_random_uuid(),
+  quotation_id uuid not null references public.quotations(id) on delete cascade,
+  description text not null,
+  quantity numeric(14,2) not null default 1,
+  unit_price numeric(14,2) not null default 0,
+  position integer not null default 1,
+  line_total numeric(14,2) generated always as (quantity * unit_price) stored
+);
+
 create table if not exists public.inventory_movements (
   id uuid primary key default gen_random_uuid(),
   company_id uuid not null references public.companies(id) on delete cascade,
@@ -203,6 +217,10 @@ alter table public.customers add column if not exists phone text;
 alter table public.customers add column if not exists city text;
 alter table public.customers add column if not exists address text;
 alter table public.customers add column if not exists notes text;
+alter table public.companies add column if not exists logo_url text;
+alter table public.companies add column if not exists accent_color text;
+alter table public.companies add column if not exists quote_accent text;
+alter table public.companies add column if not exists quote_footer text;
 alter table public.invoices add column if not exists dian_status text not null default 'Por enviar';
 alter table public.invoices add column if not exists cufe text;
 alter table public.invoices add column if not exists qr_url text;
@@ -236,6 +254,7 @@ create index if not exists idx_suppliers_company_id on public.suppliers(company_
 create index if not exists idx_products_company_id on public.products(company_id);
 create index if not exists idx_invoices_company_id on public.invoices(company_id);
 create index if not exists idx_quotations_company_id on public.quotations(company_id);
+create index if not exists idx_quotation_items_quotation_position on public.quotation_items(quotation_id, position);
 create index if not exists idx_inventory_movements_company_id on public.inventory_movements(company_id);
 create index if not exists idx_dian_events_company_id on public.dian_events(company_id);
 create index if not exists idx_warehouses_company_id on public.warehouses(company_id);
@@ -253,6 +272,7 @@ alter table public.products enable row level security;
 alter table public.invoices enable row level security;
 alter table public.quotations enable row level security;
 alter table public.invoice_items enable row level security;
+alter table public.quotation_items enable row level security;
 alter table public.inventory_movements enable row level security;
 alter table public.dian_events enable row level security;
 alter table public.warehouses enable row level security;
@@ -272,6 +292,7 @@ grant select, insert, update, delete on
   public.invoices,
   public.quotations,
   public.invoice_items,
+  public.quotation_items,
   public.inventory_movements,
   public.dian_events,
   public.warehouses,
@@ -304,6 +325,9 @@ begin
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'companies' and policyname = 'companies_read_own') then
     create policy "companies_read_own" on public.companies for select using (id = public.current_company_id());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'companies' and policyname = 'companies_update_own') then
+    create policy "companies_update_own" on public.companies for update using (id = public.current_company_id()) with check (id = public.current_company_id());
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'customers' and policyname = 'customers_company_access') then
     create policy "customers_company_access" on public.customers for all using (company_id = public.current_company_id()) with check (company_id = public.current_company_id());
@@ -359,6 +383,24 @@ begin
         select 1 from public.invoices
         where invoices.id = invoice_items.invoice_id
           and invoices.company_id = public.current_company_id()
+      )
+    );
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'quotation_items' and policyname = 'quotation_items_company_access') then
+    create policy "quotation_items_company_access"
+    on public.quotation_items for all
+    using (
+      exists (
+        select 1 from public.quotations
+        where quotations.id = quotation_items.quotation_id
+          and quotations.company_id = public.current_company_id()
+      )
+    )
+    with check (
+      exists (
+        select 1 from public.quotations
+        where quotations.id = quotation_items.quotation_id
+          and quotations.company_id = public.current_company_id()
       )
     );
   end if;

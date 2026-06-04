@@ -16,7 +16,10 @@ const defaultData = {
     email: "admin@empresa.com",
     commercialName: "Comercial Andina",
     industry: "Retail y servicios",
-    accent: "#0f766e"
+    accent: "#0f766e",
+    logoUrl: "",
+    quoteAccent: "#0f766e",
+    quoteFooter: "Cotizacion sujeta a disponibilidad, aprobacion y condiciones comerciales acordadas."
   },
   cloud: {
     mode: "Modo local",
@@ -47,8 +50,8 @@ const defaultData = {
     { id: "FE-1046", customer: "Cafe Norte", product: "Servicio tecnico", quantity: 1, status: "Pagada", date: "2026-05-23", subtotal: 420000, tax: 79800, dianStatus: "Validada", cufe: "CUFE-DEMO-FE1046", xmlUrl: "https://docs.quantroxsystems.cloud/xml/FE-1046.xml", qrUrl: "https://docs.quantroxsystems.cloud/qr/FE-1046.png", dianResponse: "Validacion simulada exitosa", paymentLink: "https://pay.quantroxsystems.cloud/FE-1046" }
   ],
   quotations: [
-    { id: "CT-1003", customer: "Mercado La 80", contact: "admin@la80.com", service: "Suite empresarial + inventario", quantity: 1, unitPrice: 79900, taxRate: 19, status: "Enviada", validUntil: "2026-06-15", date: "2026-05-24", notes: "Incluye configuracion inicial y acompanamiento remoto." },
-    { id: "CT-1002", customer: "Cafe Norte", contact: "gerencia@cafenorte.com", service: "Desarrollo de portal de clientes", quantity: 1, unitPrice: 1200000, taxRate: 19, status: "Aceptada", validUntil: "2026-06-05", date: "2026-05-23", notes: "Alcance sujeto a integraciones de pago." }
+    { id: "CT-1003", customer: "Mercado La 80", contact: "admin@la80.com", service: "Suite empresarial + inventario", items: [{ service: "Suite empresarial + inventario", quantity: 1, unitPrice: 79900 }], taxRate: 19, status: "Enviada", validUntil: "2026-06-15", date: "2026-05-24", notes: "Incluye configuracion inicial y acompanamiento remoto." },
+    { id: "CT-1002", customer: "Cafe Norte", contact: "gerencia@cafenorte.com", service: "Desarrollo de portal de clientes", items: [{ service: "Desarrollo de portal de clientes", quantity: 1, unitPrice: 1200000 }], taxRate: 19, status: "Aceptada", validUntil: "2026-06-05", date: "2026-05-23", notes: "Alcance sujeto a integraciones de pago." }
   ],
   dianEvents: [
     { date: "2026-05-24", invoice: "FE-1048", event: "Factura validada", status: "Validada", response: "CUFE generado en modo prueba" },
@@ -402,6 +405,28 @@ async function loadCloudData() {
     cloudClient.from("activity_logs").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(80)
   ]);
 
+  let quotationItems = [];
+  const quotationIds = (quotationsResult.data || []).map((item) => item.id);
+  if (quotationIds.length) {
+    const { data: itemRows, error: itemError } = await cloudClient
+      .from("quotation_items")
+      .select("*")
+      .in("quotation_id", quotationIds)
+      .order("position", { ascending: true });
+
+    if (!itemError) {
+      quotationItems = itemRows || [];
+    } else if (!String(itemError.message || "").includes("schema cache")) {
+      markCloudPending("Items de cotizacion", itemError);
+    }
+  }
+
+  const quotationItemsById = quotationItems.reduce((acc, item) => {
+    acc[item.quotation_id] = acc[item.quotation_id] || [];
+    acc[item.quotation_id].push(item);
+    return acc;
+  }, {});
+
   if (companyResult.data) {
     data.company = {
       ...data.company,
@@ -413,7 +438,11 @@ async function loadCloudData() {
       plan: companyResult.data.plan || data.company.plan,
       user: profile.full_name,
       commercialName: companyResult.data.name,
-      industry: data.company.industry
+      industry: data.company.industry,
+      logoUrl: companyResult.data.logo_url || data.company.logoUrl,
+      accent: companyResult.data.accent_color || data.company.accent,
+      quoteAccent: companyResult.data.quote_accent || companyResult.data.accent_color || data.company.quoteAccent,
+      quoteFooter: companyResult.data.quote_footer || data.company.quoteFooter
     };
   }
 
@@ -459,8 +488,11 @@ async function loadCloudData() {
     customer: item.customer_name,
     contact: item.contact_email || "",
     service: item.service,
-    quantity: Number(item.quantity || 1),
-    unitPrice: Number(item.unit_price || 0),
+    items: (quotationItemsById[item.id] || []).length ? quotationItemsById[item.id].map((row) => ({
+      service: row.description,
+      quantity: Number(row.quantity || 1),
+      unitPrice: Number(row.unit_price || 0)
+    })) : [{ service: item.service, quantity: Number(item.quantity || 1), unitPrice: Number(item.unit_price || 0) }],
     taxRate: Number(item.tax_rate || 19),
     status: item.status || "Borrador",
     validUntil: item.valid_until || "",
@@ -930,7 +962,11 @@ async function syncCompanyToCloud() {
     nit: data.company.nit,
     city: data.company.city,
     email: data.company.email,
-    plan: data.company.plan
+    plan: data.company.plan,
+    logo_url: data.company.logoUrl || null,
+    accent_color: data.company.accent || null,
+    quote_accent: data.company.quoteAccent || data.company.accent || null,
+    quote_footer: data.company.quoteFooter || null
   }).eq("id", data.company.id);
 
   if (error) {
@@ -1062,6 +1098,7 @@ async function syncQuotationToCloud(quotation) {
     return;
   }
 
+  const items = getQuotationItems(quotation);
   const subtotal = getQuotationSubtotal(quotation);
   const tax = getQuotationTax(quotation);
   const payload = {
@@ -1069,9 +1106,9 @@ async function syncQuotationToCloud(quotation) {
     number: quotation.id,
     customer_name: quotation.customer,
     contact_email: quotation.contact,
-    service: quotation.service,
-    quantity: quotation.quantity,
-    unit_price: quotation.unitPrice,
+    service: getQuotationSummary(quotation),
+    quantity: items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+    unit_price: subtotal,
     tax_rate: quotation.taxRate,
     subtotal,
     tax,
@@ -1083,7 +1120,7 @@ async function syncQuotationToCloud(quotation) {
   };
   const { data: inserted, error } = await cloudClient
     .from("quotations")
-    .insert(payload)
+    .upsert(payload, { onConflict: "company_id,number" })
     .select("id")
     .single();
 
@@ -1093,6 +1130,29 @@ async function syncQuotationToCloud(quotation) {
   }
 
   quotation.dbId = inserted?.id || quotation.dbId;
+
+  const itemPayload = items.map((item, index) => ({
+    quotation_id: quotation.dbId,
+    description: item.service,
+    quantity: item.quantity,
+    unit_price: item.unitPrice,
+    position: index + 1
+  }));
+
+  const deleteResult = await cloudClient.from("quotation_items").delete().eq("quotation_id", quotation.dbId);
+  if (deleteResult.error) {
+    markLocalPending(quotation, "Cotizacion", deleteResult.error);
+    return;
+  }
+
+  if (itemPayload.length) {
+    const { error: itemsError } = await cloudClient.from("quotation_items").insert(itemPayload);
+    if (itemsError) {
+      markLocalPending(quotation, "Cotizacion", itemsError);
+      return;
+    }
+  }
+
   markLocalSynced(quotation);
   markCloudSynced("Cotizacion");
 }
@@ -2185,7 +2245,7 @@ function getInvoiceWhatsAppUrl(invoice) {
 }
 
 function getQuotationSubtotal(quotation) {
-  return Number(quotation.quantity || 0) * Number(quotation.unitPrice || 0);
+  return getQuotationItems(quotation).reduce((sum, item) => sum + Number(item.quantity || 0) * Number(item.unitPrice || 0), 0);
 }
 
 function getQuotationTax(quotation) {
@@ -2199,6 +2259,40 @@ function getQuotationTotal(quotation) {
 function getQuotationWhatsAppUrl(quotation) {
   const text = `Hola ${quotation.customer}, te compartimos la cotizacion ${quotation.id} por ${formatMoney(getQuotationTotal(quotation))}. Vigencia: ${quotation.validUntil || "por definir"}.`;
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+
+function getQuotationItems(quotation) {
+  if (Array.isArray(quotation.items) && quotation.items.length) {
+    return quotation.items.map((item) => ({
+      service: item.service || item.description || quotation.service || "Item",
+      quantity: Number(item.quantity || 1),
+      unitPrice: Number(item.unitPrice || item.unit_price || 0)
+    }));
+  }
+
+  return [{
+    service: quotation.service || "Item",
+    quantity: Number(quotation.quantity || 1),
+    unitPrice: Number(quotation.unitPrice || 0)
+  }];
+}
+
+function getQuotationSummary(quotation) {
+  const items = getQuotationItems(quotation);
+  if (items.length <= 1) {
+    return items[0]?.service || quotation.service || "Cotizacion";
+  }
+
+  return `${items[0].service} + ${items.length - 1} item(s)`;
+}
+
+function getQuoteAccent() {
+  return data.company.quoteAccent || data.company.accent || "#0f766e";
+}
+
+function isPalaciosCompany() {
+  const company = `${data.company.name || ""} ${data.company.nit || ""}`.toUpperCase();
+  return company.includes("PALACIOS") || company.includes("901-326-858") || company.includes("901326858");
 }
 
 function renderQuotationActions(quotation) {
@@ -2450,47 +2544,64 @@ function printQuotation(quotationId) {
   const subtotal = getQuotationSubtotal(quotation);
   const tax = getQuotationTax(quotation);
   const total = getQuotationTotal(quotation);
+  const items = getQuotationItems(quotation);
+  const accent = getQuoteAccent();
+  const palacios = isPalaciosCompany();
   printable.document.write(`
     <!doctype html>
     <html>
       <head>
         <title>${escapeHtml(quotation.id)}</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 40px; color: #0f172a; }
-          .quote { max-width: 760px; margin: 0 auto; }
-          .top { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0f766e; padding-bottom: 20px; }
-          h1 { margin: 0; font-size: 34px; }
-          h2 { margin: 0 0 8px; font-size: 18px; color: #0f766e; }
+          body { font-family: Arial, sans-serif; margin: 34px; color: #0f172a; background: #f8fafc; }
+          .quote { max-width: 860px; margin: 0 auto; background: #fff; padding: 28px; border: 1px solid #e2e8f0; }
+          .top { display: flex; justify-content: space-between; gap: 24px; border-bottom: 3px solid ${escapeHtml(accent)}; padding-bottom: 20px; }
+          .brand { display: flex; align-items: center; gap: 14px; }
+          .logo { width: 72px; height: 72px; object-fit: contain; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px; }
+          .logo-mark { display: grid; width: 72px; height: 72px; place-items: center; border-radius: 8px; color: #fff; background: ${escapeHtml(accent)}; font-size: 24px; font-weight: 900; }
+          h1 { margin: 0; font-size: ${palacios ? "38px" : "34px"}; }
+          h2 { margin: 0 0 8px; font-size: 18px; color: ${escapeHtml(accent)}; }
+          .meta { text-align: right; }
+          .client-box { margin-top: 22px; padding: 14px; border-left: 4px solid ${escapeHtml(accent)}; background: #f8fafc; }
           table { width: 100%; margin-top: 28px; border-collapse: collapse; }
-          th, td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+          th { color: #fff; background: ${escapeHtml(accent)}; }
+          th, td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
+          td.num, th.num { text-align: right; }
           .totals { margin-top: 24px; display: grid; gap: 8px; justify-content: end; }
           .totals p { margin: 0; min-width: 260px; display: flex; justify-content: space-between; }
           .total { font-size: 22px; font-weight: 800; }
-          .note { margin-top: 28px; padding: 14px; background: #ecfdf5; border-radius: 8px; }
+          .note { margin-top: 28px; padding: 14px; background: #f0fdf4; border-radius: 8px; border: 1px solid #bbf7d0; }
+          .footer { margin-top: 24px; color: #475569; font-size: 12px; }
         </style>
       </head>
       <body>
         <main class="quote">
           <section class="top">
-            <div>
-              <h2>${escapeHtml(data.company.name)}</h2>
-              <p>NIT ${escapeHtml(data.company.nit)}<br>${escapeHtml(data.company.city)}<br>${escapeHtml(data.company.email)}</p>
+            <div class="brand">
+              ${data.company.logoUrl ? `<img class="logo" src="${escapeHtml(data.company.logoUrl)}" alt="${escapeHtml(data.company.name)}">` : `<div class="logo-mark">${escapeHtml((data.company.commercialName || data.company.name).slice(0, 2).toUpperCase())}</div>`}
+              <div>
+                <h2>${escapeHtml(data.company.name)}</h2>
+                <p>NIT ${escapeHtml(data.company.nit)}<br>${escapeHtml(data.company.city)}<br>${escapeHtml(data.company.email)}</p>
+              </div>
             </div>
-            <div>
-              <h1>${escapeHtml(quotation.id)}</h1>
+            <div class="meta">
+              <h1>${palacios ? "COTIZACION" : escapeHtml(quotation.id)}</h1>
+              ${palacios ? `<h2>${escapeHtml(quotation.id)}</h2>` : ""}
               <p>Fecha: ${escapeHtml(quotation.date)}<br>Vigencia: ${escapeHtml(quotation.validUntil || "Por definir")}<br>Estado: ${escapeHtml(quotation.status)}</p>
             </div>
           </section>
-          <p><b>Cliente:</b> ${escapeHtml(quotation.customer)}<br><b>Contacto:</b> ${escapeHtml(quotation.contact || "No registrado")}</p>
+          <div class="client-box"><b>Cliente:</b> ${escapeHtml(quotation.customer)}<br><b>Contacto:</b> ${escapeHtml(quotation.contact || "No registrado")}</div>
           <table>
-            <thead><tr><th>Producto / Servicio</th><th>Cantidad</th><th>Valor unitario</th><th>Subtotal</th></tr></thead>
+            <thead><tr><th>Producto / Servicio</th><th class="num">Cantidad</th><th class="num">Valor unitario</th><th class="num">Subtotal</th></tr></thead>
             <tbody>
-              <tr>
-                <td>${escapeHtml(quotation.service)}</td>
-                <td>${escapeHtml(String(quotation.quantity || 1))}</td>
-                <td>${formatMoney(quotation.unitPrice)}</td>
-                <td>${formatMoney(subtotal)}</td>
-              </tr>
+              ${items.map((item) => `
+                <tr>
+                  <td>${escapeHtml(item.service)}</td>
+                  <td class="num">${escapeHtml(String(item.quantity))}</td>
+                  <td class="num">${formatMoney(item.unitPrice)}</td>
+                  <td class="num">${formatMoney(item.quantity * item.unitPrice)}</td>
+                </tr>
+              `).join("")}
             </tbody>
           </table>
           <div class="totals">
@@ -2499,6 +2610,7 @@ function printQuotation(quotationId) {
             <p class="total"><span>Total</span><b>${formatMoney(total)}</b></p>
           </div>
           <div class="note">${escapeHtml(quotation.notes || "Cotizacion sujeta a disponibilidad y aprobacion del cliente.")}</div>
+          <div class="footer">${escapeHtml(data.company.quoteFooter || "")}</div>
         </main>
         <script>window.print();</script>
       </body>
@@ -2635,6 +2747,7 @@ function renderQuotations() {
   const totalQuoted = quotations.reduce((sum, item) => sum + getQuotationTotal(item), 0);
   const accepted = quotations.filter((item) => item.status === "Aceptada");
   const sent = quotations.filter((item) => item.status === "Enviada");
+  const palacios = isPalaciosCompany();
   return `
     <section class="summary-grid">
       ${metric("Cotizaciones", quotations.length, "Propuestas creadas")}
@@ -2642,15 +2755,30 @@ function renderQuotations() {
       ${metric("Aceptadas", accepted.length, "Listas para facturar", accepted.length ? "good" : "")}
       ${metric("En seguimiento", sent.length, "Pendientes de respuesta", sent.length ? "attention" : "")}
     </section>
-    <section class="dashboard-grid">
+    <section class="hero-panel quotation-hero ${palacios ? "palacios-quote" : ""}">
+      <div>
+        <p class="eyebrow">${palacios ? "Palacios Constructores" : "Propuestas comerciales"}</p>
+        <h2>${palacios ? "Cotizaciones de obra con varios materiales y servicios." : "Cotizaciones editables por producto, cantidad y valor unitario."}</h2>
+        <p>${palacios ? "Formato personalizado para obra civil, suministros, mano de obra y condiciones comerciales." : "Configura logo, color de marca e items desde la misma suite."}</p>
+      </div>
+      <div class="quote-brand-preview" style="--quote-accent:${escapeHtml(getQuoteAccent())}">
+        ${data.company.logoUrl ? `<img src="${escapeHtml(data.company.logoUrl)}" alt="${escapeHtml(data.company.name)}">` : `<b>${escapeHtml((data.company.commercialName || data.company.name).slice(0, 2).toUpperCase())}</b>`}
+        <span>${escapeHtml(data.company.name)}</span>
+      </div>
+    </section>
+    <section class="dashboard-grid wide-left">
       <article class="panel">
         <h3>Nueva cotizacion <span class="panel-label">Cliente real</span></h3>
-        <form class="form-grid" id="quotationForm">
+        <form class="form-grid quotation-form" id="quotationForm">
           <label>Cliente <input name="customer" required list="customerOptions" placeholder="Nombre o razon social"></label>
           <label>Correo / contacto <input name="contact" type="email" placeholder="cliente@empresa.com"></label>
-          <label>Producto o servicio <input name="service" required list="productServiceOptions" placeholder="Servicio o producto requerido"></label>
-          <label>Cantidad <input name="quantity" required min="1" step="0.01" type="number" value="1"></label>
-          <label>Valor unitario <input name="unitPrice" required min="0" type="number" placeholder="0"></label>
+          <div class="quote-items span-2" data-quotation-items>
+            <div class="quote-items-header">
+              <b>Productos, servicios o materiales</b>
+              <button class="mini-action success" type="button" data-add-quotation-item>Agregar item</button>
+            </div>
+            ${renderQuotationItemRow(1)}
+          </div>
           <label>IVA %
             <select name="taxRate">
               <option value="19">19%</option>
@@ -2667,7 +2795,7 @@ function renderQuotations() {
               <option>Rechazada</option>
             </select>
           </label>
-          <label class="span-2">Notas <textarea name="notes" rows="3" placeholder="Alcance, tiempos de entrega, condiciones de pago o garantias"></textarea></label>
+          <label class="span-2">Notas <textarea name="notes" rows="3" placeholder="${palacios ? "Forma de pago, tiempos de entrega, sitio de obra, garantias" : "Alcance, tiempos de entrega, condiciones de pago o garantias"}"></textarea></label>
           <button class="primary-button" type="submit">Crear cotizacion</button>
         </form>
         <datalist id="customerOptions">
@@ -2691,15 +2819,26 @@ function renderQuotations() {
         </div>
       </article>
     </section>
-    ${renderTable("Cotizaciones recientes", ["Numero", "Cliente", "Producto / Servicio", "Vigencia", "Estado", "Total", "Acciones"], quotations.map((item, index) => [
+    ${renderTable("Cotizaciones recientes", ["Numero", "Cliente", "Items", "Vigencia", "Estado", "Total", "Acciones"], quotations.map((item, index) => [
       item.id,
       item.customer,
-      item.service,
+      getQuotationSummary(item),
       item.validUntil || "Por definir",
       badge(item.status, item.status === "Aceptada" ? "good" : item.status === "Rechazada" ? "danger" : "info"),
       formatMoney(getQuotationTotal(item)),
       `${renderQuotationActions(item)} ${renderDeleteAction("quotations", index)}`
     ]))}
+  `;
+}
+
+function renderQuotationItemRow(index) {
+  return `
+    <div class="quote-item-row" data-quotation-item-row>
+      <label>Producto / servicio <input name="itemService" required list="productServiceOptions" placeholder="Item ${index}"></label>
+      <label>Cantidad <input name="itemQuantity" required min="0.01" step="0.01" type="number" value="1"></label>
+      <label>Valor unitario <input name="itemUnitPrice" required min="0" type="number" placeholder="0"></label>
+      <button class="mini-action danger" type="button" data-remove-quotation-item>Eliminar</button>
+    </div>
   `;
 }
 
@@ -3465,6 +3604,9 @@ function renderSettings() {
               <option value="#c2410c" ${data.company.accent === "#c2410c" ? "selected" : ""}>Naranja comercio</option>
             </select>
           </label>
+          <label>Logo empresa <input name="logoUrl" value="${escapeHtml(data.company.logoUrl || "")}" placeholder="https://.../logo.png"></label>
+          <label>Color cotizacion <input name="quoteAccent" value="${escapeHtml(data.company.quoteAccent || data.company.accent || "#0f766e")}" type="color"></label>
+          <label class="span-2">Texto final cotizacion <textarea name="quoteFooter" rows="3" placeholder="Condiciones comerciales, pago, garantias">${escapeHtml(data.company.quoteFooter || "")}</textarea></label>
           <button class="primary-button span-2" type="submit">Actualizar empresa</button>
         </form>
       </article>
@@ -3647,13 +3789,25 @@ function bindModuleEvents() {
     async quotationForm(event) {
       const form = new FormData(event.currentTarget);
       const quotationNumber = `CT-${1001 + (data.quotations || []).length}`;
+      const services = form.getAll("itemService").map((item) => String(item).trim());
+      const quantities = form.getAll("itemQuantity").map((item) => Number(item));
+      const unitPrices = form.getAll("itemUnitPrice").map((item) => Number(item));
+      const items = services.map((service, index) => ({
+        service,
+        quantity: quantities[index] || 0,
+        unitPrice: unitPrices[index] || 0
+      })).filter((item) => item.service && item.quantity > 0);
+
+      if (!items.length) {
+        throw new Error("Agrega al menos un producto o servicio a la cotizacion.");
+      }
+
       const quotation = {
         id: quotationNumber,
         customer: String(form.get("customer")).trim(),
         contact: String(form.get("contact")).trim(),
-        service: String(form.get("service")).trim(),
-        quantity: Number(form.get("quantity")),
-        unitPrice: Number(form.get("unitPrice")),
+        service: items[0].service,
+        items,
         taxRate: Number(form.get("taxRate")),
         status: String(form.get("status")),
         validUntil: String(form.get("validUntil") || ""),
@@ -3774,6 +3928,9 @@ function bindModuleEvents() {
       data.company.commercialName = String(form.get("commercialName")).trim();
       data.company.industry = String(form.get("industry")).trim();
       data.company.accent = String(form.get("accent"));
+      data.company.logoUrl = String(form.get("logoUrl") || "").trim();
+      data.company.quoteAccent = String(form.get("quoteAccent") || data.company.accent).trim();
+      data.company.quoteFooter = String(form.get("quoteFooter") || "").trim();
       await syncCompanyToCloud();
       await recordActivity("Ajustes", "Empresa actualizada", data.company.name);
     },
@@ -3853,6 +4010,20 @@ function bindModuleEvents() {
       render();
     });
   });
+
+  const addQuotationItem = document.querySelector("[data-add-quotation-item]");
+  if (addQuotationItem) {
+    addQuotationItem.addEventListener("click", () => {
+      const container = document.querySelector("[data-quotation-items]");
+      const nextIndex = container ? container.querySelectorAll("[data-quotation-item-row]").length + 1 : 1;
+      if (container) {
+        container.insertAdjacentHTML("beforeend", renderQuotationItemRow(nextIndex));
+      }
+      bindQuotationItemRemoveButtons();
+    });
+  }
+
+  bindQuotationItemRemoveButtons();
 
   const samplePos = document.querySelector("[data-add-sample-pos]");
   if (samplePos) {
@@ -3974,6 +4145,18 @@ function bindModuleEvents() {
       await addBotResponse(String(form.get("question") || ""));
     });
   }
+}
+
+function bindQuotationItemRemoveButtons() {
+  document.querySelectorAll("[data-remove-quotation-item]").forEach((button) => {
+    if (button.dataset.bound === "true") return;
+    button.dataset.bound = "true";
+    button.addEventListener("click", () => {
+      const rows = document.querySelectorAll("[data-quotation-item-row]");
+      if (rows.length <= 1) return;
+      button.closest("[data-quotation-item-row]")?.remove();
+    });
+  });
 }
 
 function bindInstallButton() {
