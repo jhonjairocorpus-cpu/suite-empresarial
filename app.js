@@ -547,8 +547,11 @@ async function loadCloudData() {
     detail: item.detail
   }));
 
+  purgeOldDeletedRecords();
   restorePendingLocalRecords(localSnapshot);
+  applyDeletedRecordFilters();
   await syncPendingRecords();
+  await syncPendingDeletes();
 
   data.cloud.mode = "Cloud conectado";
   data.cloud.syncStatus = "Datos sincronizados";
@@ -556,6 +559,15 @@ async function loadCloudData() {
   data.cloud.lastSync = "Carga inicial";
   data.cloud.pendingSync = 0;
   saveData();
+}
+
+function applyDeletedRecordFilters() {
+  Object.keys(deleteConfig).forEach((type) => {
+    const config = deleteConfig[type];
+    if (Array.isArray(data[config.list])) {
+      data[config.list] = data[config.list].filter((item) => !isDeletedLocally(config.list, item));
+    }
+  });
 }
 
 function getLocalOperationalSnapshot() {
@@ -586,13 +598,84 @@ function restorePendingLocalRecords(snapshot) {
     const cloudIds = new Set(data[listName].map((item) => item?.[idKey]).filter(Boolean));
     const pendingRows = localRows.filter((item) => {
       const sameCompany = !item?._pendingCompanyId || item._pendingCompanyId === data.company.id;
-      return item?._pendingCloud && sameCompany && !cloudIds.has(item?.[idKey]);
+      return item?._pendingCloud && sameCompany && !cloudIds.has(item?.[idKey]) && !isDeletedLocally(listName, item);
     });
 
     data[listName] = [
       ...pendingRows.map((item) => ({ ...item, _pendingCloud: true })),
-      ...data[listName]
+      ...data[listName].filter((item) => !isDeletedLocally(listName, item))
     ];
+  });
+}
+
+function getDeletedRecords() {
+  data.cloud.deletedRecords = Array.isArray(data.cloud.deletedRecords) ? data.cloud.deletedRecords : [];
+  return data.cloud.deletedRecords;
+}
+
+function getRecordIdentity(listName, item) {
+  const idKey = getCloudIdentityKey(listName);
+  return item?.[idKey] || "";
+}
+
+function isDeletedLocally(listName, item) {
+  const recordId = getRecordIdentity(listName, item);
+  if (!recordId) {
+    return false;
+  }
+
+  return getDeletedRecords().some((record) => (
+    record.companyId === data.company.id &&
+    record.listName === listName &&
+    record.recordId === recordId
+  ));
+}
+
+function markRecordDeleted(listName, item, table) {
+  const recordId = getRecordIdentity(listName, item);
+  if (!recordId) {
+    return null;
+  }
+
+  const deletedRecords = getDeletedRecords();
+  const existing = deletedRecords.find((record) => (
+    record.companyId === data.company.id &&
+    record.listName === listName &&
+    record.recordId === recordId
+  ));
+
+  if (existing) {
+    existing.pending = true;
+    existing.deletedAt = new Date().toISOString();
+    return existing;
+  }
+
+  const record = {
+    companyId: data.company.id,
+    listName,
+    table,
+    recordId,
+    pending: true,
+    deletedAt: new Date().toISOString()
+  };
+  deletedRecords.push(record);
+  return record;
+}
+
+function markDeleteSynced(deletedRecord) {
+  if (!deletedRecord) {
+    return;
+  }
+
+  deletedRecord.pending = false;
+  deletedRecord.syncedAt = new Date().toISOString();
+}
+
+function purgeOldDeletedRecords() {
+  const cutoff = Date.now() - 1000 * 60 * 60 * 24 * 14;
+  data.cloud.deletedRecords = getDeletedRecords().filter((record) => {
+    const time = Date.parse(record.deletedAt || record.syncedAt || "");
+    return record.pending || !time || time > cutoff;
   });
 }
 
@@ -1117,7 +1200,7 @@ function getDeleteLabel(item) {
   return item?.name || item?.fullName || item?.customer || item?.detail || item?.product || item?.text || item?.id || item?.sku || "registro";
 }
 
-async function deleteCloudRecord(config, item) {
+async function deleteCloudRecord(config, item, deletedRecord = null) {
   const recordId = item?.[config.idKey || "id"];
   if (!canSyncCloud() || !recordId) {
     return;
@@ -1127,6 +1210,38 @@ async function deleteCloudRecord(config, item) {
   if (error) {
     markCloudPending(`Eliminar ${config.label}`, error);
     throw error;
+  }
+
+  markDeleteSynced(deletedRecord);
+}
+
+async function syncPendingDeletes() {
+  if (!canSyncCloud()) {
+    return;
+  }
+
+  const configsByList = Object.values(deleteConfig).reduce((acc, config) => {
+    acc[config.list] = config;
+    return acc;
+  }, {});
+
+  for (const deletedRecord of getDeletedRecords()) {
+    if (!deletedRecord.pending || deletedRecord.companyId !== data.company.id) {
+      continue;
+    }
+
+    const config = configsByList[deletedRecord.listName];
+    if (!config) {
+      continue;
+    }
+
+    const { error } = await cloudClient.from(config.table).delete().eq("id", deletedRecord.recordId);
+    if (error) {
+      markCloudPending(`Eliminar ${config.label}`, error);
+      continue;
+    }
+
+    markDeleteSynced(deletedRecord);
   }
 }
 
@@ -1144,8 +1259,16 @@ async function deleteRecord(type, index) {
     return;
   }
 
-  await deleteCloudRecord(config, item);
+  const deletedRecord = markRecordDeleted(config.list, item, config.table);
   list.splice(index, 1);
+  saveData();
+
+  try {
+    await deleteCloudRecord(config, item, deletedRecord);
+  } catch (error) {
+    data.cloud.syncStatus = `Eliminar ${config.label} pendiente`;
+  }
+
   await recordActivity(config.area, "Registro eliminado", `${config.label}: ${label}`);
   saveData();
   render();
@@ -3313,7 +3436,8 @@ function renderSettings() {
     { label: "Sesion", value: cloudSession ? "Activa" : "Local", tone: cloudSession ? "good" : "info" },
     { label: "Usuario cloud", value: cloudSession?.user?.email || "Sin sesion", tone: cloudSession ? "good" : "warn" },
     { label: "Empresa cloud", value: data.company.id ? "Vinculada" : "Sin ID", tone: data.company.id ? "good" : "warn" },
-    { label: "Pendientes", value: Number(data.cloud.pendingSync || 0), tone: Number(data.cloud.pendingSync || 0) ? "warn" : "good" }
+    { label: "Pendientes", value: Number(data.cloud.pendingSync || 0), tone: Number(data.cloud.pendingSync || 0) ? "warn" : "good" },
+    { label: "Borrados pendientes", value: getDeletedRecords().filter((record) => record.pending && record.companyId === data.company.id).length, tone: getDeletedRecords().some((record) => record.pending && record.companyId === data.company.id) ? "warn" : "good" }
   ];
 
   return `
