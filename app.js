@@ -16,9 +16,9 @@ const defaultData = {
     email: "admin@empresa.com",
     commercialName: "Comercial Andina",
     industry: "Retail y servicios",
-    accent: "#0f766e",
+    accent: "#f59e0b",
     logoUrl: "",
-    quoteAccent: "#0f766e",
+    quoteAccent: "#f59e0b",
     quoteFooter: "Cotizacion sujeta a disponibilidad, aprobacion y condiciones comerciales acordadas."
   },
   cloud: {
@@ -1404,8 +1404,10 @@ async function clearCompanyOperationalData() {
 }
 
 function applyBrandTheme() {
-  document.documentElement.style.setProperty("--accent", data.company.accent || "#0f766e");
-  document.documentElement.style.setProperty("--accent-2", data.company.accent || "#18a999");
+  const oldDefaultAccent = data.company.accent === "#0f766e" ? "" : data.company.accent;
+  const accent = oldDefaultAccent || "#f59e0b";
+  document.documentElement.style.setProperty("--accent", accent);
+  document.documentElement.style.setProperty("--accent-2", accent === "#f59e0b" ? "#ff7a00" : accent);
 }
 
 function loadData() {
@@ -2284,7 +2286,8 @@ function getQuotationSummary(quotation) {
 }
 
 function getQuoteAccent() {
-  return data.company.quoteAccent || data.company.accent || "#0f766e";
+  const accent = data.company.quoteAccent || data.company.accent || "#f59e0b";
+  return accent === "#0f766e" ? "#f59e0b" : accent;
 }
 
 function isPalaciosCompany() {
@@ -2631,13 +2634,13 @@ function printInvoice(invoiceId) {
         <style>
           body { font-family: Arial, sans-serif; margin: 40px; color: #0f172a; }
           .invoice { max-width: 760px; margin: 0 auto; }
-          .top { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #0f766e; padding-bottom: 20px; }
+          .top { display: flex; justify-content: space-between; gap: 24px; border-bottom: 2px solid #f59e0b; padding-bottom: 20px; }
           h1 { margin: 0; font-size: 34px; }
-          h2 { margin: 0 0 8px; font-size: 18px; color: #0f766e; }
+          h2 { margin: 0 0 8px; font-size: 18px; color: #f59e0b; }
           table { width: 100%; margin-top: 28px; border-collapse: collapse; }
           th, td { border-bottom: 1px solid #e2e8f0; padding: 12px; text-align: left; }
           .total { margin-top: 24px; text-align: right; font-size: 22px; font-weight: 800; }
-          .note { margin-top: 28px; padding: 14px; background: #ecfdf5; border-radius: 8px; }
+          .note { margin-top: 28px; padding: 14px; background: #fff7e6; border-radius: 8px; }
         </style>
       </head>
       <body>
@@ -3749,14 +3752,14 @@ function renderSettings() {
           <label>Sector <input name="industry" value="${escapeHtml(data.company.industry || "Servicios")}" required></label>
           <label>Color de marca
             <select name="accent">
-              <option value="#0f766e" ${data.company.accent === "#0f766e" ? "selected" : ""}>Verde Quantrox</option>
-              <option value="#2563eb" ${data.company.accent === "#2563eb" ? "selected" : ""}>Azul confianza</option>
-              <option value="#7c3aed" ${data.company.accent === "#7c3aed" ? "selected" : ""}>Violeta tecnologia</option>
+              <option value="#f59e0b" ${data.company.accent === "#f59e0b" || data.company.accent === "#0f766e" ? "selected" : ""}>Oro Quantrox</option>
+              <option value="#4b5563" ${data.company.accent === "#4b5563" ? "selected" : ""}>Gris metalico</option>
+              <option value="#111827" ${data.company.accent === "#111827" ? "selected" : ""}>Negro ejecutivo</option>
               <option value="#c2410c" ${data.company.accent === "#c2410c" ? "selected" : ""}>Naranja comercio</option>
             </select>
           </label>
           <label>Logo empresa <input name="logoUrl" value="${escapeHtml(data.company.logoUrl || "")}" placeholder="https://.../logo.png"></label>
-          <label>Color cotizacion <input name="quoteAccent" value="${escapeHtml(data.company.quoteAccent || data.company.accent || "#0f766e")}" type="color"></label>
+          <label>Color cotizacion <input name="quoteAccent" value="${escapeHtml(data.company.quoteAccent || data.company.accent || "#f59e0b")}" type="color"></label>
           <label class="span-2">Texto final cotizacion <textarea name="quoteFooter" rows="3" placeholder="Condiciones comerciales, pago, garantias">${escapeHtml(data.company.quoteFooter || "")}</textarea></label>
           <button class="primary-button span-2" type="submit">Actualizar empresa</button>
         </form>
