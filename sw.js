@@ -1,13 +1,15 @@
-const CACHE_NAME = "suite-empresarial-v42";
+const CACHE_NAME = "suite-empresarial-v43";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=42",
-  "./app.js?v=42",
+  "./styles.css?v=43",
+  "./app.js?v=43",
   "./cloud-config.js?v=18",
-  "./manifest.webmanifest?v=18",
+  "./manifest.webmanifest?v=43",
   "./assets/icon-192.png",
-  "./assets/icon-512.png"
+  "./assets/icon-512.png",
+  "./assets/icono.png",
+  "./assets/quantrox-suite-logo.png"
 ];
 
 self.addEventListener("install", (event) => {

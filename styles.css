@@ -127,8 +127,12 @@ a {
   text-align: center;
 }
 
-.public-hero .brand {
-  display: none;
+.hero-brand-logo {
+  display: block;
+  width: min(72vw, 420px);
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 8px;
 }
 
 .public-hero h1 {
@@ -675,16 +679,14 @@ a {
   gap: 12px;
 }
 
-.brand-mark {
-  display: grid;
+.brand-icon {
+  display: block;
   width: 48px;
   height: 48px;
   flex: 0 0 48px;
-  place-items: center;
   border-radius: 12px;
-  color: #07111f;
-  background: linear-gradient(135deg, var(--gold), #fff3b0);
-  font-weight: 950;
+  object-fit: contain;
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .brand strong,

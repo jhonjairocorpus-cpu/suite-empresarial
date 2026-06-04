@@ -1773,7 +1773,7 @@ function render() {
   app.innerHTML = `
     <aside class="sidebar">
       <a class="brand" href="https://quantroxsystems.cloud/" aria-label="Quantrox Systems">
-        <span class="brand-mark">Q</span>
+        <img class="brand-icon" src="assets/icono.png" alt="Quantrox">
         <span><strong>Quantrox Suite</strong><small>${escapeHtml(data.company.plan)}</small></span>
       </a>
       <nav class="nav-list" aria-label="Modulos">
@@ -1821,7 +1821,7 @@ function renderLogin() {
     <main class="public-site">
       <header class="public-topbar">
         <a class="brand" href="https://quantroxsystems.cloud/">
-          <span class="brand-mark">Q</span>
+          <img class="brand-icon" src="assets/icono.png" alt="Quantrox">
           <span><strong>Quantrox Suite</strong><small>Software empresarial</small></span>
         </a>
         <nav class="public-nav" aria-label="Navegacion publica">
@@ -1835,10 +1835,7 @@ function renderLogin() {
         <a class="primary-button public-cta" href="https://wa.me/573218247072?text=Hola%20Quantrox%20Systems,%20quiero%20cotizar%20la%20Suite%20Empresarial" target="_blank" rel="noopener">Cotizar</a>
       </header>
       <section class="public-hero">
-        <a class="brand" href="https://quantroxsystems.cloud/">
-          <span class="brand-mark">Q</span>
-          <span><strong>Quantrox Suite</strong><small>Plataforma empresarial</small></span>
-        </a>
+        <img class="hero-brand-logo" src="assets/quantrox-suite-logo.png" alt="Quantrox Suite Empresarial">
         <p class="eyebrow">Suite empresarial para Colombia</p>
         <h1>Invierte en una app que conecta ventas, inventario y contabilidad.</h1>
         <p>Elige un plan, creamos tu cuenta y operas desde oficina, celular o navegador con datos sincronizados en la nube.</p>
@@ -2144,7 +2141,7 @@ function renderPasswordRecovery() {
     <main class="login-screen">
       <section class="login-copy">
         <a class="brand" href="https://quantroxsystems.cloud/">
-          <span class="brand-mark">Q</span>
+          <img class="brand-icon" src="assets/icono.png" alt="Quantrox">
           <span><strong>Quantrox Suite</strong><small>Seguridad de acceso</small></span>
         </a>
         <h1>Crea una nueva contraseña segura.</h1>
