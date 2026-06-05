@@ -180,6 +180,7 @@ const moduleMeta = {
   pos: { title: "POS inteligente", eyebrow: "Caja y pagos" },
   inventory: { title: "Inventario", eyebrow: "Stock y costos" },
   accounting: { title: "Contabilidad", eyebrow: "Balance y estados" },
+  palaciosAccounting: { title: "Portal Contable", eyebrow: "Palacios Constructores" },
   payroll: { title: "Nomina", eyebrow: "Equipo y provisiones" },
   customers: { title: "Clientes", eyebrow: "CRM comercial" },
   suppliers: { title: "Proveedores", eyebrow: "Compras y terceros" },
@@ -208,6 +209,10 @@ const navItems = [
   ["portal", "Portal", "L"],
   ["automations", "Auto", "Z"],
   ["settings", "Ajustes", "S"]
+];
+
+const palaciosNavItems = [
+  ["palaciosAccounting", "Contabilidad", "C"]
 ];
 
 let data = mergeData(loadData(), defaultData);
@@ -535,7 +540,12 @@ async function loadCloudData() {
     category: item.category || item.account,
     type: item.type,
     amount: Number(item.amount || 0),
-    date: item.entry_date || item.created_at?.slice(0, 10) || getToday()
+    date: item.entry_date || item.created_at?.slice(0, 10) || getToday(),
+    thirdParty: item.third_party || "",
+    document: item.document_number || "",
+    project: item.project_name || "",
+    paymentMethod: item.payment_method || "",
+    paymentStatus: item.payment_status || "Pagado"
   }));
 
   data.payroll = (employeesResult.data || []).map((item) => ({
@@ -940,16 +950,31 @@ async function insertAccountingEntryCloud(entry, entryDate) {
     category: entry.category || entry.account,
     type: entry.type,
     amount: entry.amount,
-    entry_date: entryDate
+    entry_date: entryDate,
+    third_party: entry.thirdParty || null,
+    document_number: entry.document || null,
+    project_name: entry.project || null,
+    payment_method: entry.paymentMethod || null,
+    payment_status: entry.paymentStatus || "Pagado"
   };
   const result = await cloudClient.from("accounting_entries").insert(payload).select("id").single();
 
-  if (!result.error || !String(result.error.message || "").includes("category")) {
+  if (!result.error) {
     return result;
   }
 
-  const { category, ...legacyPayload } = payload;
-  return cloudClient.from("accounting_entries").insert(legacyPayload).select("id").single();
+  const errorMessage = String(result.error.message || "");
+  if (errorMessage.includes("third_party") || errorMessage.includes("document_number") || errorMessage.includes("project_name") || errorMessage.includes("payment_method") || errorMessage.includes("payment_status")) {
+    const { third_party, document_number, project_name, payment_method, payment_status, ...compatiblePayload } = payload;
+    return cloudClient.from("accounting_entries").insert(compatiblePayload).select("id").single();
+  }
+
+  if (errorMessage.includes("category")) {
+    const { category, third_party, document_number, project_name, payment_method, payment_status, ...legacyPayload } = payload;
+    return cloudClient.from("accounting_entries").insert(legacyPayload).select("id").single();
+  }
+
+  return result;
 }
 
 async function syncCompanyToCloud() {
@@ -1771,7 +1796,9 @@ function render() {
     return;
   }
 
+  normalizeActiveModule();
   const meta = moduleMeta[activeModule];
+  const visibleNavItems = getVisibleNavItems();
   app.innerHTML = `
     <aside class="sidebar">
       <a class="brand" href="https://quantroxsystems.cloud/" aria-label="Quantrox Systems">
@@ -1779,7 +1806,7 @@ function render() {
         <span><strong>Quantrox Suite</strong><small>${escapeHtml(data.company.plan)}</small></span>
       </a>
       <nav class="nav-list" aria-label="Modulos">
-        ${navItems.map(([key, label, icon]) => `
+        ${visibleNavItems.map(([key, label, icon]) => `
           <button class="nav-item ${activeModule === key ? "active" : ""}" type="button" data-nav="${key}">
             <span>${icon}</span>${escapeHtml(label)}
           </button>
@@ -2216,6 +2243,7 @@ function renderActiveModule() {
     pos: renderPos,
     inventory: renderInventory,
     accounting: renderAccounting,
+    palaciosAccounting: renderPalaciosAccounting,
     payroll: renderPayroll,
     customers: renderCustomers,
     suppliers: renderSuppliers,
@@ -2441,6 +2469,17 @@ function printPalaciosQuotation(printable, quotation, items, subtotal, tax, tota
       </body>
     </html>
   `);
+}
+
+function getVisibleNavItems() {
+  return isPalaciosCompany() ? palaciosNavItems : navItems;
+}
+
+function normalizeActiveModule() {
+  const visibleKeys = getVisibleNavItems().map(([key]) => key);
+  if (!visibleKeys.includes(activeModule)) {
+    activeModule = visibleKeys[0] || "home";
+  }
 }
 
 function renderQuotationActions(quotation) {
@@ -3286,6 +3325,144 @@ function renderCompareBar(label, amount, max, tone) {
   `;
 }
 
+function renderPalaciosAccounting() {
+  const comparison = getAccountingComparison();
+  const totals = getTotals();
+  const entries = data.accounting || [];
+  const sales = entries.filter((item) => item.type === "Ingreso" && ["Ventas", "Anticipos", "Servicios de obra"].includes(item.category)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const purchases = entries.filter((item) => item.type === "Gasto" && ["Materiales", "Compras", "Herramientas y equipos"].includes(item.category)).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const pendingPay = entries.filter((item) => item.paymentStatus === "Pendiente" && item.type === "Gasto").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const pendingCollect = entries.filter((item) => item.paymentStatus === "Pendiente" && item.type === "Ingreso").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const projects = [...new Set(entries.map((item) => item.project).filter(Boolean))];
+  const maxCompare = Math.max(comparison.current.income, comparison.current.expense, comparison.previous.income, comparison.previous.expense, 1);
+  const expenseCategories = Object.entries(comparison.current.categories).sort((a, b) => b[1] - a[1]).slice(0, 6);
+
+  return `
+    <section class="hero-panel palacios-accounting-hero">
+      <div>
+        <p class="eyebrow">Contabilidad exclusiva</p>
+        <h2>Control financiero de obras, compras, gastos y ventas.</h2>
+        <p>Portal contable simplificado para Palacios Constructores: registra movimientos reales, clasifica por obra, identifica terceros, controla documentos y revisa utilidad mensual.</p>
+        <div class="accounting-kpis">
+          <span><b>${formatMoney(totals.income)}</b><small>Ingresos registrados</small></span>
+          <span><b>${formatMoney(totals.expense)}</b><small>Gastos y compras</small></span>
+          <span><b>${formatMoney(totals.balance)}</b><small>Resultado general</small></span>
+        </div>
+      </div>
+      <div class="palacios-ledger-card">
+        <strong>PALACIOS</strong>
+        <span>Libro contable operativo</span>
+        <small>${escapeHtml(data.company.nit)} · ${entries.length} movimientos</small>
+      </div>
+    </section>
+    <section class="summary-grid">
+      ${metric("Ventas / ingresos", formatMoney(sales || totals.income), "Facturacion, anticipos y servicios")}
+      ${metric("Compras", formatMoney(purchases), "Materiales, herramientas y equipos", purchases > sales * 0.65 && sales ? "attention" : "")}
+      ${metric("Por pagar", formatMoney(pendingPay), "Gastos pendientes", pendingPay ? "attention" : "")}
+      ${metric("Por cobrar", formatMoney(pendingCollect), "Ingresos pendientes", pendingCollect ? "attention" : "")}
+    </section>
+    <section class="panel comparison-controls">
+      <div>
+        <h3>Comparativo mensual <span class="panel-label">Gerencia</span></h3>
+        <p>Compara ingresos, compras, gastos y utilidad para tomar decisiones por periodo.</p>
+      </div>
+      <label>Mes principal
+        <select data-accounting-month="primary">
+          ${getAccountingMonthOptions(comparison.current.monthKey)}
+        </select>
+      </label>
+      <label>Comparar contra
+        <select data-accounting-month="secondary">
+          ${getAccountingMonthOptions(comparison.previous.monthKey)}
+        </select>
+      </label>
+    </section>
+    <section class="dashboard-grid">
+      <article class="panel">
+        <h3>Nuevo movimiento <span class="panel-label">Palacios</span></h3>
+        <form class="form-grid palacios-ledger-form" id="accountingForm">
+          <label>Fecha <input name="date" required type="date" value="${getToday()}"></label>
+          <label>Tipo <select name="type"><option>Gasto</option><option>Ingreso</option></select></label>
+          <label>Concepto <input name="detail" required placeholder="Ej. Compra de cemento para obra"></label>
+          <label>Tercero <input name="thirdParty" placeholder="Proveedor o cliente"></label>
+          <label>Documento <input name="document" placeholder="Factura, recibo, remision"></label>
+          <label>Obra / proyecto <input name="project" list="projectOptions" placeholder="Ej. Obra Villa Rica"></label>
+          <label>Cuenta <input name="account" required placeholder="Caja, Banco, CxP, CxC"></label>
+          <label>Categoria <select name="category">
+            <option>Materiales</option>
+            <option>Compras</option>
+            <option>Mano de obra</option>
+            <option>Transporte</option>
+            <option>Herramientas y equipos</option>
+            <option>Administracion</option>
+            <option>Impuestos</option>
+            <option>Ventas</option>
+            <option>Anticipos</option>
+            <option>Servicios de obra</option>
+            <option>Financiero</option>
+          </select></label>
+          <label>Forma de pago <select name="paymentMethod"><option>Efectivo</option><option>Transferencia</option><option>Credito</option><option>Tarjeta</option><option>Cheque</option></select></label>
+          <label>Estado <select name="paymentStatus"><option>Pagado</option><option>Pendiente</option><option>Parcial</option></select></label>
+          <label>Monto <input name="amount" required min="0" type="number" placeholder="0"></label>
+          <button class="primary-button span-2" type="submit">Guardar movimiento contable</button>
+        </form>
+        <datalist id="projectOptions">
+          ${projects.map((item) => `<option value="${escapeHtml(item)}"></option>`).join("")}
+        </datalist>
+      </article>
+      <article class="panel">
+        <h3>Lectura del mes <span class="panel-label">${getMonthLabel(comparison.current.monthKey)}</span></h3>
+        <div class="comparison-bars palacios-bars">
+          ${renderCompareBar(`Ingresos ${getMonthLabel(comparison.current.monthKey)}`, comparison.current.income, maxCompare, "good")}
+          ${renderCompareBar(`Gastos ${getMonthLabel(comparison.current.monthKey)}`, comparison.current.expense, maxCompare, "danger")}
+          ${renderCompareBar(`Ingresos ${getMonthLabel(comparison.previous.monthKey)}`, comparison.previous.income, maxCompare, "soft")}
+          ${renderCompareBar(`Gastos ${getMonthLabel(comparison.previous.monthKey)}`, comparison.previous.expense, maxCompare, "soft")}
+        </div>
+        <ul class="insight-list accounting-insights">
+          <li><span>Utilidad del mes</span><b>${formatMoney(comparison.current.result)}</b></li>
+          <li><span>Margen</span><b>${comparison.current.margin}%</b></li>
+          <li><span>Mayor gasto</span><b>${escapeHtml(comparison.current.topExpense[0])}</b></li>
+          <li><span>Obras activas</span><b>${projects.length}</b></li>
+        </ul>
+      </article>
+    </section>
+    <section class="dashboard-grid wide-left">
+      <article class="panel">
+        <h3>Gastos por categoria <span class="panel-label">Control de costos</span></h3>
+        <div class="progress-stack">
+          ${expenseCategories.length ? expenseCategories.map(([category, amount]) => `
+            <div class="progress-item">
+              <span><b>${escapeHtml(category)}</b><b>${formatMoney(amount)}</b></span>
+              <div class="progress-track"><i style="width:${comparison.current.expense ? Math.round((amount / comparison.current.expense) * 100) : 0}%"></i></div>
+            </div>
+          `).join("") : "<p>No hay gastos registrados en este periodo.</p>"}
+        </div>
+      </article>
+      <article class="panel">
+        <h3>Alertas contables <span class="panel-label">Accion</span></h3>
+        <ul class="insight-list">
+          <li><span>Compras sobre ingresos</span><b>${sales ? Math.round((purchases / sales) * 100) : 0}%</b></li>
+          <li><span>Pendiente por pagar</span><b>${formatMoney(pendingPay)}</b></li>
+          <li><span>Pendiente por cobrar</span><b>${formatMoney(pendingCollect)}</b></li>
+          <li><span>Recomendacion</span><b>${pendingCollect > pendingPay ? "priorizar cobro" : pendingPay ? "programar pagos" : "mantener control"}</b></li>
+        </ul>
+      </article>
+    </section>
+    ${renderTable("Libro contable Palacios", ["Fecha", "Concepto", "Tercero", "Documento", "Obra", "Categoria", "Tipo", "Estado", "Monto", "Acciones"], entries.map((item, index) => [
+      getEntryDate(item, index),
+      item.detail,
+      item.thirdParty || "Sin tercero",
+      item.document || "Sin documento",
+      item.project || "General",
+      item.category || item.account,
+      badge(item.type, item.type === "Ingreso" ? "good" : "danger"),
+      badge(item.paymentStatus || "Pagado", item.paymentStatus === "Pendiente" ? "warn" : "good"),
+      formatMoney(item.amount),
+      renderDeleteAction("accounting", index)
+    ]))}
+  `;
+}
+
 function renderDeleteAction(type, index, label = "Eliminar") {
   return `<button class="mini-action danger" type="button" data-delete-type="${escapeHtml(type)}" data-delete-index="${index}">${escapeHtml(label)}</button>`;
 }
@@ -4017,7 +4194,12 @@ function bindModuleEvents() {
         account: String(form.get("account")).trim(),
         category: String(form.get("category") || form.get("account")).trim(),
         type: String(form.get("type")),
-        amount: Number(form.get("amount"))
+        amount: Number(form.get("amount")),
+        thirdParty: String(form.get("thirdParty") || "").trim(),
+        document: String(form.get("document") || "").trim(),
+        project: String(form.get("project") || "").trim(),
+        paymentMethod: String(form.get("paymentMethod") || "").trim(),
+        paymentStatus: String(form.get("paymentStatus") || "Pagado").trim()
       };
       data.accounting.unshift(entry);
       await syncAccountingEntryToCloud(entry);

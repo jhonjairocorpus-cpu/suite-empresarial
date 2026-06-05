@@ -203,6 +203,11 @@ create table if not exists public.accounting_entries (
   type text not null check (type in ('Ingreso', 'Gasto')),
   amount numeric(14,2) not null,
   entry_date date not null default current_date,
+  third_party text,
+  document_number text,
+  project_name text,
+  payment_method text,
+  payment_status text not null default 'Pagado',
   created_at timestamptz not null default now()
 );
 
@@ -236,6 +241,12 @@ create table if not exists public.activity_logs (
 
 alter table public.accounting_entries
 add column if not exists category text not null default 'General';
+
+alter table public.accounting_entries add column if not exists third_party text;
+alter table public.accounting_entries add column if not exists document_number text;
+alter table public.accounting_entries add column if not exists project_name text;
+alter table public.accounting_entries add column if not exists payment_method text;
+alter table public.accounting_entries add column if not exists payment_status text not null default 'Pagado';
 
 create index if not exists idx_profiles_company_id on public.profiles(company_id);
 create index if not exists idx_customers_company_id on public.customers(company_id);

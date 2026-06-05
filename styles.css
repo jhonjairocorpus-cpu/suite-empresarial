@@ -980,6 +980,13 @@ h3 {
     #0b0d10;
 }
 
+.palacios-accounting-hero {
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgba(8, 17, 31, 0.98), rgba(5, 86, 76, 0.92)),
+    #0b1220;
+}
+
 .quotation-hero {
   color: #fff;
   background:
@@ -998,10 +1005,48 @@ h3 {
 .app-hero p,
 .portal-hero p,
 .accounting-hero p,
+.palacios-accounting-hero p,
 .quotation-hero p {
   max-width: 720px;
   color: rgba(255, 255, 255, 0.75);
   line-height: 1.65;
+}
+
+.palacios-ledger-card {
+  display: grid;
+  gap: 12px;
+  align-content: center;
+  min-height: 210px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  padding: 24px;
+  background:
+    linear-gradient(160deg, rgba(245, 184, 46, 0.16), rgba(255, 255, 255, 0.08));
+}
+
+.palacios-ledger-card strong {
+  color: var(--gold);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  letter-spacing: 0.08em;
+}
+
+.palacios-ledger-card span {
+  font-size: 1.2rem;
+  font-weight: 950;
+}
+
+.palacios-ledger-card small {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.palacios-ledger-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.palacios-bars {
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgba(8, 17, 31, 0.96), rgba(5, 86, 76, 0.86));
 }
 
 .quote-brand-preview {
@@ -1737,6 +1782,7 @@ textarea {
   .dashboard-grid.wide-left,
   .hero-panel,
   .comparison-controls,
+  .palacios-ledger-form,
   .danger-zone,
   .public-topbar,
   .pricing-grid,
@@ -1783,6 +1829,7 @@ textarea {
   .topbar,
   .summary-grid,
   .form-grid,
+  .palacios-ledger-form,
   .inventory-form,
   .invoice-row,
   .quote-items-header,

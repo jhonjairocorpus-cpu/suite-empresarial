@@ -180,6 +180,11 @@ create table if not exists public.accounting_entries (
   type text not null check (type in ('Ingreso', 'Gasto')),
   amount numeric(14,2) not null,
   entry_date date not null default current_date,
+  third_party text,
+  document_number text,
+  project_name text,
+  payment_method text,
+  payment_status text not null default 'Pagado',
   created_at timestamptz not null default now()
 );
 
@@ -244,6 +249,11 @@ alter table public.quotations add column if not exists issued_at date not null d
 alter table public.quotations add column if not exists notes text;
 alter table public.invoice_items add column if not exists line_total numeric(14,2) generated always as (quantity * unit_price) stored;
 alter table public.accounting_entries add column if not exists category text not null default 'General';
+alter table public.accounting_entries add column if not exists third_party text;
+alter table public.accounting_entries add column if not exists document_number text;
+alter table public.accounting_entries add column if not exists project_name text;
+alter table public.accounting_entries add column if not exists payment_method text;
+alter table public.accounting_entries add column if not exists payment_status text not null default 'Pagado';
 
 create unique index if not exists idx_products_company_sku_unique on public.products(company_id, sku);
 create unique index if not exists idx_invoices_company_number_unique on public.invoices(company_id, number);
