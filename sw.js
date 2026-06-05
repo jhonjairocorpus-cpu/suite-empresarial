@@ -1,13 +1,15 @@
-const CACHE_NAME = "suite-empresarial-v47";
+const CACHE_NAME = "suite-empresarial-v48";
 const APP_ASSETS = [
   "./",
   "./index.html",
   "./styles.css?v=47",
   "./app.js?v=47",
   "./cloud-config.js?v=18",
-  "./manifest.webmanifest?v=47",
+  "./manifest.webmanifest?v=48",
+  "./assets/favicon.svg",
   "./assets/icon-192.png",
   "./assets/icon-512.png",
+  "./assets/maskable-icon-512.png",
   "./assets/icono.png",
   "./assets/quantrox-suite-logo.png"
 ];

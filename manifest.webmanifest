@@ -2,12 +2,13 @@
   "name": "Quantrox Suite Empresarial",
   "short_name": "Quantrox",
   "description": "Suite empresarial con facturacion, POS, inventario, contabilidad, nomina, clientes y reportes.",
+  "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#ffffff",
-  "theme_color": "#0b0d10",
+  "background_color": "#071421",
+  "theme_color": "#071421",
   "categories": ["business", "finance", "productivity"],
   "icons": [
     {
@@ -18,6 +19,12 @@
     },
     {
       "src": "assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/maskable-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
