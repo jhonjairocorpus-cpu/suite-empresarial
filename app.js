@@ -3361,6 +3361,7 @@ function renderPalaciosAccounting() {
       ${metric("Por pagar", formatMoney(pendingPay), "Gastos pendientes", pendingPay ? "attention" : "")}
       ${metric("Por cobrar", formatMoney(pendingCollect), "Ingresos pendientes", pendingCollect ? "attention" : "")}
     </section>
+    ${renderPalaciosInstallPanel()}
     <section class="panel comparison-controls">
       <div>
         <h3>Comparativo mensual <span class="panel-label">Gerencia</span></h3>
@@ -3460,6 +3461,43 @@ function renderPalaciosAccounting() {
       formatMoney(item.amount),
       renderDeleteAction("accounting", index)
     ]))}
+  `;
+}
+
+function renderPalaciosInstallPanel() {
+  const cloudReadyLabel = canSyncCloud() ? "Supabase activo" : "Inicia sesion para sincronizar";
+  const cloudTone = canSyncCloud() ? "good" : "warn";
+
+  return `
+    <section class="panel palacios-install-panel">
+      <div>
+        <h3>Instalar portal Palacios <span class="panel-label">App movil y Windows</span></h3>
+        <p>Instala este portal en computador, Android o iPhone. Los usuarios vinculados a Palacios ven la misma contabilidad porque los movimientos se guardan en Supabase.</p>
+      </div>
+      <div class="install-status-grid">
+        <span><b>Datos compartidos</b>${badge(cloudReadyLabel, cloudTone)}</span>
+        <span><b>Empresa</b>${badge(data.company.name || "Palacios", "good")}</span>
+        <span><b>Ultima sincronizacion</b>${badge(data.cloud.lastBackup || "Pendiente", canSyncCloud() ? "good" : "warn")}</span>
+      </div>
+      <div class="install-platforms">
+        <article>
+          <b>Windows</b>
+          <small>En Chrome o Edge usa el boton Instalar o el icono de instalacion de la barra de direcciones.</small>
+        </article>
+        <article>
+          <b>Android</b>
+          <small>Abre el portal en Chrome y toca Instalar app o Agregar a pantalla principal.</small>
+        </article>
+        <article>
+          <b>iPhone</b>
+          <small>Abre en Safari, toca Compartir y luego Agregar a pantalla de inicio.</small>
+        </article>
+      </div>
+      <div class="quick-actions">
+        <button class="primary-button" type="button" data-install-app>Instalar app</button>
+        <button class="secondary-button" type="button" data-refresh-cloud>Actualizar datos</button>
+      </div>
+    </section>
   `;
 }
 
@@ -4347,6 +4385,21 @@ function bindModuleEvents() {
     });
   });
 
+  const refreshCloud = document.querySelector("[data-refresh-cloud]");
+  if (refreshCloud) {
+    refreshCloud.addEventListener("click", async () => {
+      if (!canSyncCloud()) {
+        cloudError = "Debes iniciar sesion para actualizar los datos desde Supabase.";
+        render();
+        return;
+      }
+
+      await loadCloudData();
+      cloudNotice = "Datos actualizados desde Supabase.";
+      render();
+    });
+  }
+
   const addQuotationItem = document.querySelector("[data-add-quotation-item]");
   if (addQuotationItem) {
     addQuotationItem.addEventListener("click", () => {
@@ -4495,43 +4548,61 @@ function bindQuotationItemRemoveButtons() {
   });
 }
 
-function bindInstallButton() {
-  const installButton = document.querySelector("#installButton");
-  if (!installButton) {
+function getInstallButtons() {
+  return [...document.querySelectorAll("#installButton, [data-install-app]")];
+}
+
+function updateInstallButtons() {
+  getInstallButtons().forEach((button) => {
+    if (deferredInstallPrompt || button.matches("[data-install-app]")) {
+      button.classList.remove("hidden");
+    }
+  });
+}
+
+async function promptInstallApp() {
+  if (!deferredInstallPrompt) {
+    cloudNotice = "Si no aparece la instalacion automatica, usa el menu del navegador: Instalar app o Agregar a pantalla principal.";
+    render();
     return;
   }
 
-  if (deferredInstallPrompt) {
-    installButton.classList.remove("hidden");
+  deferredInstallPrompt.prompt();
+  await deferredInstallPrompt.userChoice;
+  deferredInstallPrompt = null;
+  getInstallButtons().forEach((button) => {
+    if (button.id === "installButton") {
+      button.classList.add("hidden");
+    }
+  });
+}
+
+function bindInstallButton() {
+  const installButtons = getInstallButtons();
+  if (!installButtons.length) {
+    return;
   }
 
-  installButton.addEventListener("click", async () => {
-    if (!deferredInstallPrompt) {
-      return;
-    }
+  updateInstallButtons();
 
-    deferredInstallPrompt.prompt();
-    await deferredInstallPrompt.userChoice;
-    deferredInstallPrompt = null;
-    installButton.classList.add("hidden");
+  installButtons.forEach((button) => {
+    button.addEventListener("click", promptInstallApp);
   });
 }
 
 window.addEventListener("beforeinstallprompt", (event) => {
   event.preventDefault();
   deferredInstallPrompt = event;
-  const installButton = document.querySelector("#installButton");
-  if (installButton) {
-    installButton.classList.remove("hidden");
-  }
+  updateInstallButtons();
 });
 
 window.addEventListener("appinstalled", () => {
   deferredInstallPrompt = null;
-  const installButton = document.querySelector("#installButton");
-  if (installButton) {
-    installButton.classList.add("hidden");
-  }
+  getInstallButtons().forEach((button) => {
+    if (button.id === "installButton") {
+      button.classList.add("hidden");
+    }
+  });
 });
 
 if ("serviceWorker" in navigator) {

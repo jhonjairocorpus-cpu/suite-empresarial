@@ -1049,6 +1049,43 @@ h3 {
     linear-gradient(135deg, rgba(8, 17, 31, 0.96), rgba(5, 86, 76, 0.86));
 }
 
+.palacios-install-panel,
+.install-status-grid,
+.install-platforms {
+  display: grid;
+  gap: 14px;
+}
+
+.palacios-install-panel {
+  margin-bottom: 18px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 251, 235, 0.78));
+}
+
+.install-status-grid,
+.install-platforms {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.install-status-grid span,
+.install-platforms article {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.install-platforms b {
+  color: var(--ink);
+}
+
+.install-platforms small {
+  color: var(--muted);
+  line-height: 1.45;
+}
+
 .quote-brand-preview {
   --quote-accent: var(--accent);
   display: grid;
@@ -1783,6 +1820,8 @@ textarea {
   .hero-panel,
   .comparison-controls,
   .palacios-ledger-form,
+  .install-status-grid,
+  .install-platforms,
   .danger-zone,
   .public-topbar,
   .pricing-grid,
