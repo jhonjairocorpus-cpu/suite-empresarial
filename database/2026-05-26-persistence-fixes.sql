@@ -21,7 +21,8 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   company_id uuid not null references public.companies(id) on delete cascade,
   full_name text not null,
-  role text not null check (role in ('Propietario', 'Administrador', 'Contador', 'Cajero', 'Inventario', 'Gerencia')),
+  contact_email text,
+  role text not null check (role in ('Propietario', 'Administrador', 'Oficina', 'Auxiliar contable', 'Contador', 'Cajero', 'Inventario', 'Gerencia')),
   status text not null default 'Activo' check (status in ('Activo', 'Invitado', 'Suspendido')),
   created_at timestamptz not null default now()
 );
@@ -222,6 +223,9 @@ alter table public.customers add column if not exists phone text;
 alter table public.customers add column if not exists city text;
 alter table public.customers add column if not exists address text;
 alter table public.customers add column if not exists notes text;
+alter table public.profiles add column if not exists contact_email text;
+alter table public.profiles drop constraint if exists profiles_role_check;
+alter table public.profiles add constraint profiles_role_check check (role in ('Propietario', 'Administrador', 'Oficina', 'Auxiliar contable', 'Contador', 'Cajero', 'Inventario', 'Gerencia'));
 alter table public.companies add column if not exists logo_url text;
 alter table public.companies add column if not exists accent_color text;
 alter table public.companies add column if not exists quote_accent text;
@@ -325,6 +329,26 @@ $$;
 
 grant execute on function public.current_company_id() to authenticated;
 
+create or replace function public.current_user_is_principal()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.profiles
+    where id = auth.uid()
+      and role = 'Propietario'
+      and status = 'Activo'
+  )
+$$;
+
+grant execute on function public.current_user_is_principal() to authenticated;
+
+drop policy if exists "accounting_entries_company_access" on public.accounting_entries;
+
 do $$
 begin
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'profiles' and policyname = 'profiles_read_own_company') then
@@ -332,6 +356,12 @@ begin
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'profiles' and policyname = 'profiles_update_self') then
     create policy "profiles_update_self" on public.profiles for update using (id = auth.uid()) with check (id = auth.uid());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'profiles' and policyname = 'profiles_insert_by_principal') then
+    create policy "profiles_insert_by_principal" on public.profiles for insert with check (public.current_user_is_principal() and company_id = public.current_company_id());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'profiles' and policyname = 'profiles_update_by_principal') then
+    create policy "profiles_update_by_principal" on public.profiles for update using (public.current_user_is_principal() and company_id = public.current_company_id()) with check (public.current_user_is_principal() and company_id = public.current_company_id());
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'companies' and policyname = 'companies_read_own') then
     create policy "companies_read_own" on public.companies for select using (id = public.current_company_id());
@@ -366,8 +396,17 @@ begin
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'price_lists' and policyname = 'price_lists_company_access') then
     create policy "price_lists_company_access" on public.price_lists for all using (company_id = public.current_company_id()) with check (company_id = public.current_company_id());
   end if;
-  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'accounting_entries' and policyname = 'accounting_entries_company_access') then
-    create policy "accounting_entries_company_access" on public.accounting_entries for all using (company_id = public.current_company_id()) with check (company_id = public.current_company_id());
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'accounting_entries' and policyname = 'accounting_entries_select_company') then
+    create policy "accounting_entries_select_company" on public.accounting_entries for select using (company_id = public.current_company_id());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'accounting_entries' and policyname = 'accounting_entries_insert_company') then
+    create policy "accounting_entries_insert_company" on public.accounting_entries for insert with check (company_id = public.current_company_id());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'accounting_entries' and policyname = 'accounting_entries_update_company') then
+    create policy "accounting_entries_update_company" on public.accounting_entries for update using (company_id = public.current_company_id()) with check (company_id = public.current_company_id());
+  end if;
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'accounting_entries' and policyname = 'accounting_entries_delete_principal') then
+    create policy "accounting_entries_delete_principal" on public.accounting_entries for delete using (company_id = public.current_company_id() and public.current_user_is_principal());
   end if;
   if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'employees' and policyname = 'employees_company_access') then
     create policy "employees_company_access" on public.employees for all using (company_id = public.current_company_id()) with check (company_id = public.current_company_id());

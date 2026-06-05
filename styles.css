@@ -1086,6 +1086,19 @@ h3 {
   line-height: 1.45;
 }
 
+.muted-copy {
+  margin-top: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.insight-list small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
 .quote-brand-preview {
   --quote-accent: var(--accent);
   display: grid;

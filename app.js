@@ -40,7 +40,7 @@ const defaultData = {
     nextStep: "Seleccionar proveedor autorizado y conectar token API"
   },
   users: [
-    { name: "Administrador", email: "admin@empresa.com", role: "Propietario", status: "Activo" },
+    { id: "", name: "Administrador", email: "admin@empresa.com", role: "Propietario", status: "Activo" },
     { name: "Caja principal", email: "caja@empresa.com", role: "Cajero", status: "Invitado" },
     { name: "Contabilidad", email: "contabilidad@empresa.com", role: "Contador", status: "Invitado" }
   ],
@@ -369,11 +369,21 @@ async function loadCloudData() {
 
   const localSnapshot = getLocalOperationalSnapshot();
 
-  const { data: profile, error: profileError } = await cloudClient
+  let { data: profile, error: profileError } = await cloudClient
     .from("profiles")
-    .select("id, company_id, full_name, role, status")
+    .select("id, company_id, full_name, role, status, contact_email")
     .eq("id", cloudSession.user.id)
     .single();
+
+  if (profileError && String(profileError.message || "").includes("contact_email")) {
+    const fallbackProfile = await cloudClient
+      .from("profiles")
+      .select("id, company_id, full_name, role, status")
+      .eq("id", cloudSession.user.id)
+      .single();
+    profile = fallbackProfile.data;
+    profileError = fallbackProfile.error;
+  }
 
   if (profileError) {
     cloudError = profileError.message;
@@ -394,7 +404,8 @@ async function loadCloudData() {
     tasksResult,
     movementsResult,
     dianEventsResult,
-    activityResult
+    activityResult,
+    profilesResult
   ] = await Promise.all([
     cloudClient.from("companies").select("*").eq("id", companyId).single(),
     cloudClient.from("customers").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
@@ -407,7 +418,8 @@ async function loadCloudData() {
     cloudClient.from("tasks").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("inventory_movements").select("*").eq("company_id", companyId).order("created_at", { ascending: false }),
     cloudClient.from("dian_events").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(80),
-    cloudClient.from("activity_logs").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(80)
+    cloudClient.from("activity_logs").select("*").eq("company_id", companyId).order("created_at", { ascending: false }).limit(80),
+    cloudClient.from("profiles").select("id, company_id, full_name, role, status, contact_email").eq("company_id", companyId).order("created_at", { ascending: false })
   ]);
 
   let quotationItems = [];
@@ -451,12 +463,33 @@ async function loadCloudData() {
     };
   }
 
-  data.users = [{
-    name: profile.full_name,
-    email: cloudSession.user.email || "usuario@empresa.com",
-    role: profile.role,
-    status: profile.status
-  }];
+  const companyProfiles = profilesResult.error ? [profile] : (profilesResult.data || [profile]);
+  data.users = companyProfiles.map((item) => ({
+    id: item.id,
+    companyId: item.company_id,
+    name: item.full_name,
+    email: item.contact_email || (item.id === cloudSession.user.id ? cloudSession.user.email || "usuario@empresa.com" : ""),
+    role: item.role,
+    status: item.status
+  }));
+
+  if (!data.users.some((item) => item.id === profile.id)) {
+    data.users.unshift({
+      id: profile.id,
+      companyId: profile.company_id,
+      name: profile.full_name,
+      email: profile.contact_email || cloudSession.user.email || "usuario@empresa.com",
+      role: profile.role,
+      status: profile.status
+    });
+  }
+
+  data.users = data.users.map((item) => item.id === cloudSession.user.id ? {
+    ...item,
+    email: cloudSession.user.email || item.email || "usuario@empresa.com"
+  } : item);
+
+  data.users.sort((a, b) => Number(b.id === cloudSession.user.id) - Number(a.id === cloudSession.user.id));
 
   data.customers = (customersResult.data || []).map((item) => ({
     id: item.id,
@@ -1054,6 +1087,46 @@ async function syncEmployeeToCloud(employee) {
   markCloudSynced("Empleado");
 }
 
+async function syncUserProfileToCloud(user) {
+  if (!canSyncCloud()) {
+    markLocalPending(user, "Usuario", { message: "Sin sesion cloud" });
+    return;
+  }
+
+  if (!canManageUsers()) {
+    throw new Error("Solo el usuario principal puede crear accesos.");
+  }
+
+  if (!user.id) {
+    throw new Error("Primero crea el usuario en Supabase Auth y pega su UID.");
+  }
+
+  const payload = {
+    id: user.id,
+    company_id: data.company.id,
+    full_name: user.name,
+    contact_email: user.email || null,
+    role: user.role,
+    status: user.status || "Activo"
+  };
+
+  let { error } = await cloudClient.from("profiles").upsert(payload, { onConflict: "id" });
+
+  if (error && String(error.message || "").includes("contact_email")) {
+    const { contact_email, ...compatiblePayload } = payload;
+    const fallback = await cloudClient.from("profiles").upsert(compatiblePayload, { onConflict: "id" });
+    error = fallback.error;
+  }
+
+  if (error) {
+    markLocalPending(user, "Usuario", error);
+    throw error;
+  }
+
+  markLocalSynced(user);
+  markCloudSynced("Usuario");
+}
+
 async function syncCustomerToCloud(customer) {
   if (!canSyncCloud()) {
     markLocalPending(customer, "Cliente", { message: "Sin sesion cloud" });
@@ -1264,9 +1337,27 @@ async function updateCloudInvoiceDian(invoice) {
   markCloudSynced(`DIAN ${invoice.id}`);
 }
 
+function getCurrentUserProfile() {
+  if (cloudSession?.user?.id) {
+    const current = (data.users || []).find((item) => item.id === cloudSession.user.id);
+    if (current) {
+      return current;
+    }
+  }
+
+  return (data.users || [])[0] || {};
+}
+
+function isPrincipalUser() {
+  return getCurrentUserProfile().role === "Propietario";
+}
+
 function canManageCompanyData() {
-  const role = data.users?.[0]?.role || "";
-  return ["Propietario", "Administrador"].includes(role);
+  return isPrincipalUser();
+}
+
+function canManageUsers() {
+  return isPrincipalUser();
 }
 
 const deleteConfig = {
@@ -1331,6 +1422,10 @@ async function syncPendingDeletes() {
 }
 
 async function deleteRecord(type, index) {
+  if (!isPrincipalUser()) {
+    throw new Error("Solo el usuario principal puede eliminar registros.");
+  }
+
   const config = deleteConfig[type];
   const list = config ? data[config.list] : null;
   const item = Array.isArray(list) ? list[index] : null;
@@ -3362,6 +3457,7 @@ function renderPalaciosAccounting() {
       ${metric("Por cobrar", formatMoney(pendingCollect), "Ingresos pendientes", pendingCollect ? "attention" : "")}
     </section>
     ${renderPalaciosInstallPanel()}
+    ${renderPalaciosUserAccessPanel()}
     <section class="panel comparison-controls">
       <div>
         <h3>Comparativo mensual <span class="panel-label">Gerencia</span></h3>
@@ -3464,6 +3560,48 @@ function renderPalaciosAccounting() {
   `;
 }
 
+function getRoleOptions(selectedRole = "") {
+  const roles = ["Propietario", "Oficina", "Auxiliar contable", "Contador", "Gerencia", "Administrador"];
+  return roles.map((role) => `<option ${role === selectedRole ? "selected" : ""}>${escapeHtml(role)}</option>`).join("");
+}
+
+function renderPalaciosUserAccessPanel() {
+  if (!canManageUsers()) {
+    return "";
+  }
+
+  return `
+    <section class="dashboard-grid user-access-grid">
+      <article class="panel">
+        <h3>Crear acceso <span class="panel-label">Usuario principal</span></h3>
+        <p class="muted-copy">Primero crea el usuario en Supabase Authentication. Luego pega aqui el UID para vincularlo a Palacios y asignarle rol.</p>
+        <form class="form-grid" id="userForm">
+          <label>UID Supabase <input name="userId" required placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label>
+          <label>Nombre <input name="name" required placeholder="Nombre del usuario"></label>
+          <label>Correo <input name="email" required type="email" placeholder="usuario@empresa.com"></label>
+          <label>Rol
+            <select name="role">
+              ${getRoleOptions("Oficina")}
+            </select>
+          </label>
+          <button class="primary-button span-2" type="submit">Dar acceso</button>
+        </form>
+      </article>
+      <article class="panel">
+        <h3>Usuarios autorizados <span class="panel-label">${data.users.length} perfiles</span></h3>
+        <ul class="insight-list">
+          ${(data.users || []).map((item) => `
+            <li>
+              <span>${escapeHtml(item.name)}${item.email ? `<small>${escapeHtml(item.email)}</small>` : ""}</span>
+              <b>${escapeHtml(item.role)}</b>
+            </li>
+          `).join("")}
+        </ul>
+      </article>
+    </section>
+  `;
+}
+
 function renderPalaciosInstallPanel() {
   const cloudReadyLabel = canSyncCloud() ? "Supabase activo" : "Inicia sesion para sincronizar";
   const cloudTone = canSyncCloud() ? "good" : "warn";
@@ -3502,6 +3640,10 @@ function renderPalaciosInstallPanel() {
 }
 
 function renderDeleteAction(type, index, label = "Eliminar") {
+  if (!isPrincipalUser()) {
+    return "";
+  }
+
   return `<button class="mini-action danger" type="button" data-delete-type="${escapeHtml(type)}" data-delete-index="${index}">${escapeHtml(label)}</button>`;
 }
 
@@ -4020,20 +4162,17 @@ function renderSettings() {
     <section class="dashboard-grid">
       <article class="panel">
         <h3>Usuarios y roles <span class="panel-label">Accesos</span></h3>
-        <form class="form-grid" id="userForm">
+        ${canManageUsers() ? `<form class="form-grid" id="userForm">
+          <label>UID Supabase <input name="userId" required placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"></label>
           <label>Nombre <input name="name" required placeholder="Nombre"></label>
           <label>Correo <input name="email" required type="email" placeholder="usuario@empresa.com"></label>
           <label>Rol
             <select name="role">
-              <option>Administrador</option>
-              <option>Contador</option>
-              <option>Cajero</option>
-              <option>Inventario</option>
-              <option>Gerencia</option>
+              ${getRoleOptions("Oficina")}
             </select>
           </label>
-          <button class="primary-button" type="submit">Agregar usuario</button>
-        </form>
+          <button class="primary-button span-2" type="submit">Dar acceso</button>
+        </form>` : `<p>Solo el usuario principal puede crear accesos o cambiar roles.</p>`}
       </article>
       <article class="panel">
         <h3>Ruta a produccion <span class="panel-label">Siguiente</span></h3>
@@ -4309,14 +4448,27 @@ function bindModuleEvents() {
       await recordActivity("Ajustes", "Empresa actualizada", data.company.name);
     },
     async userForm(event) {
+      if (!canManageUsers()) {
+        throw new Error("Solo el usuario principal puede crear accesos.");
+      }
+
       const form = new FormData(event.currentTarget);
-      data.users.push({
+      const user = {
+        id: String(form.get("userId") || "").trim(),
+        companyId: data.company.id || "",
         name: String(form.get("name")).trim(),
         email: String(form.get("email")).trim(),
         role: String(form.get("role")),
-        status: "Invitado"
-      });
-      await recordActivity("Ajustes", "Usuario preparado", String(form.get("email")).trim());
+        status: "Activo"
+      };
+
+      if (!user.id) {
+        throw new Error("Pega el UID del usuario creado en Supabase Auth.");
+      }
+
+      await syncUserProfileToCloud(user);
+      data.users = [user, ...data.users.filter((item) => item.id !== user.id)];
+      await recordActivity("Ajustes", "Usuario autorizado", `${user.email} como ${user.role}`);
     },
     async clearCompanyForm(event) {
       const form = new FormData(event.currentTarget);
